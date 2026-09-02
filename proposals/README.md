@@ -19,8 +19,9 @@
 
 | ร่าง | ปลายทาง | สถานะ |
 |---|---|---|
-| [`agent-platform-issue-a-capability.md`](agent-platform-issue-a-capability.md) | [`agent-platform#46`](https://github.com/monthop-gmail/agent-platform/issues/46) | ✅ เปิดแล้ว · รอ decision |
-| [`agent-platform-issue-b-policy-authority.md`](agent-platform-issue-b-policy-authority.md) | [`agent-platform#47`](https://github.com/monthop-gmail/agent-platform/issues/47) | ✅ เปิดแล้ว · รอ decision |
+| [`agent-platform-issue-a-capability.md`](agent-platform-issue-a-capability.md) | [`agent-platform#46`](https://github.com/monthop-gmail/agent-platform/issues/46) | ✅ เปิดแล้ว · ตอบแล้ว ADR-0023 |
+| [`agent-platform-issue-b-policy-authority.md`](agent-platform-issue-b-policy-authority.md) | [`agent-platform#47`](https://github.com/monthop-gmail/agent-platform/issues/47) | ✅ เปิดแล้ว · ตอบแล้ว ADR-0022 |
+| [`agent-platform-issue-c-runtime-fallback.md`](agent-platform-issue-c-runtime-fallback.md) | `monthop-gmail/agent-platform` | 📝 ยังไม่เปิด |
 
 ## ตรวจกับของจริงแล้ว
 
