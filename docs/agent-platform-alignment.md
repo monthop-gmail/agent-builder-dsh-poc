@@ -40,6 +40,24 @@ agent/v1alpha2  (repo นี้)          agent/v1  (agent-platform)
 
 ## สองเรื่องที่ชนกันจริง
 
+> ⚠️ **แก้ 2026-09-02 หลังอ่าน `agent-platform` ทั้งรีโป** — หัวข้อนี้เขียนจากการอ่าน
+> `agent.schema.yaml` อย่างเดียว ทำให้จับ "จุดที่ชน" ผิดตำแหน่งทั้งสองข้อ:
+>
+> **ข้อ 1** ไม่ใช่ *"capability หรือ provider"* — [ADR-0009](https://github.com/monthop-gmail/agent-platform/blob/main/decisions/0009-capability-model.md)
+> ตัดสินไปแล้วและ **Accepted** ตั้งแต่ 2026-08-17 · `capability/v1` มี taxonomy 13 ตัว
+> `required`/`preferred`/`constraints.pin_provider` ครบแล้ว · ที่ชนจริงคือ **เวลา** —
+> `model/v1` เขียนว่า *"ระบุตอน runtime เท่านั้น"* ส่วน `CompiledAgent` ของเรา
+> **freeze binding ตั้งแต่ตอน build**
+>
+> **ข้อ 2** ไม่ใช่ *"ต้องเลือกอย่างใดอย่างหนึ่ง"* — `contracts/profile/v1/profile.schema.yaml`
+> เขียนไว้เองว่า *"สิทธิ์จริงคือส่วนที่ profile, agent และ policy ของ tenant ตกลงตรงกัน
+> ทั้งสามฝ่าย ค่าที่กว้างที่สุดชนะไม่ได้"* — คือ **ทั้งสองฝ่าย แคบสุดชนะ** ที่ชนจริงคือ
+> ฝ่าย agent ในกฎสามฝ่ายนั้น **ไม่มี field ให้เขียนข้อจำกัดของตัวเอง** มีแต่ `tools`
+> ที่ schema บอกว่าเป็นการ *ขอ* และ `policy_profile` ที่เป็นแค่ชื่อ
+>
+> ข้อความเดิมด้านล่างเก็บไว้ตามเดิม — คำถามที่ส่งจริงอยู่ที่ [`proposals/`](../proposals/)
+
+
 ### 1. `capability_requirement` ปะทะ `model.preferred`
 
 ADR-0009 ของเขาเขียนไว้ตรง ๆ:
