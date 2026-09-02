@@ -29,6 +29,7 @@ DeepSeek   Gemini   Claude   agent อื่น    (ตัวที่ยัง�
 | **Kimi Code CLI** | `acp` | `kimi acp` | ⚪ อ่านจาก [`docs/en/reference/kimi-acp.md`](https://github.com/MoonshotAI/kimi-code/blob/main/docs/en/reference/kimi-acp.md) — ประกาศว่า implement core 3/3 · session 11/11 |
 | **OpenAI Codex** | ยังไม่มีทางตรง | — | ⚪ ไม่พูด ACP · DSH ห่อมันเป็น subagent (`dsh-subagent-codex`) |
 | **Qwen Code** | ⚠️ **ยังไม่ได้** | `qwen serve` = ACP บน **HTTP+SSE** | ⚪ client ของเรารองรับแค่ **stdio** |
+| **Antigravity CLI** (Google) | ⚠️ **ต้องเขียน adapter** | `agy -p --output-format stream-json` | ⚪ **ไม่พูด ACP** — มี headless NDJSON ของตัวเอง ดูข้างล่าง |
 
 > เทียบกับรายชื่อ [best AI coding agent](https://www.kimi.ai/resources/best-ai-coding-agent):
 > ในนั้นมี CLI จริง 5 ตัว — Claude Code · Codex · Gemini CLI · Kimi Code · opencode
@@ -119,3 +120,72 @@ ACP_AGENT_ENV_UNSET=CLAUDECODE,CLAUDE_CODE_ENTRYPOINT
 4. ถ้าเขาไม่พูด ACP → เขียน adapter เต็มตัว ดู [`runtime-adapter.md`](runtime-adapter.md)
 
 **ไม่ว่าทางไหน manifest ไม่ต้องแก้** ซึ่งเป็นเงื่อนไขที่ P3 ตั้งไว้ตั้งแต่ต้น
+
+
+---
+
+## Antigravity CLI — ตัวแรกที่ต้องเขียน adapter จริง
+
+ทุกตัวก่อนหน้านี้เข้าทาง `acp` ได้ด้วยการตั้งค่า [Antigravity CLI](https://antigravity.google/product/antigravity-cli)
+ของ Google **ไม่พูด ACP** แต่มี headless protocol ของตัวเอง
+
+```bash
+curl -fsSL https://antigravity.google/cli/install.sh | bash     # ติดตั้ง
+agy                                                             # โหมด TUI
+agy -p "prompt" --output-format stream-json                     # headless
+```
+
+| สิ่งที่มัน mี | รายละเอียด |
+|---|---|
+| headless | `-p` / `--print` / `--prompt` |
+| output | `text` · `json` (envelope ตอนจบ) · `stream-json` = **NDJSON** events `init` `step_update` `result` |
+| input | `--input-format stream-json` — หนึ่ง JSON object ต่อบรรทัดบน stdin คุยได้หลายเทิร์นใน process เดียว |
+| resume | `--continue` / `--conversation <ID>` |
+| permission | ไม่ใช่ flag — อยู่ใน `settings.json` คีย์ `toolPermission`: `request-review` · `proceed-in-sandbox` · `always-proceed` · `strict` |
+| sandbox | `enableTerminalSandbox` · `allowNonWorkspaceAccess` |
+| MCP | ผ่าน `/mcp` ซึ่งเป็นแผง TUI |
+
+### ถ้าจะทำ adapter จะได้หน้าตาแบบนี้
+
+รูปเดียวกับ `dsh` เป๊ะ — **compile config ก่อน แล้วค่อยขับ**
+
+```text
+CompiledAgent
+    ├─ autonomy  →  settings.json: toolPermission + enableTerminalSandbox
+    └─ prompt    →  agy -p --output-format stream-json --input-format stream-json
+                    resume ผ่าน --conversation <ID>
+```
+
+### แต่ `unsupported()` จะยาว และสองข้อเป็น blocking
+
+| gap | ระดับ | เพราะ |
+|---|---|---|
+| `tools.local` | ⚠ degrades | tool ของเราเป็น TypeScript ในรีโปนี้ ส่งข้าม process ไม่ได้ |
+| `policy.forbidden` | ⛔ **blocks** | ไม่มี flag หรือคีย์ไหนหัก tool รายตัวได้ — `/permissions` เป็นแผง TUI |
+| `policy.humanApproval` | ⛔ **blocks** | `request-review` ถามผ่าน TUI ไม่มีทางส่งคำถามออกมาที่ `ctx.requestApproval` ของเรา |
+
+ตามกติกาข้อ 13 → **manifest ที่มี `policy.forbidden` หรือ `humanApproval` จะถูกปฏิเสธ**
+เหลือใช้ได้เฉพาะ manifest ทรงเดียวกับ vector `minimal`
+
+### ยังไม่ได้ทำ และเหตุผล
+
+**ยังไม่ได้รัน** — ติดตั้งเป็น `curl | bash` จาก vendor และต้องมี credential ของ Google
+ซึ่งเครื่องนี้ไม่มี ตามวิธีทำงานของรีโปนี้ adapter ที่ยืนยันด้วยการรันไม่ได้ ก็ไม่ควรมี
+(นี่คือบทเรียนเดียวกับที่ทำให้ target ชื่อ `dsh` เดิมต้องเปลี่ยนชื่อ — ดู §4.1 ของ
+[`poc-review-2026-09-02.md`](poc-review-2026-09-02.md))
+
+ตัดสินใจได้สองทาง:
+
+1. **ทำ** — ถ้ามี credential แล้วยอมรับว่าจะรองรับได้แค่ manifest ที่ไม่มี policy
+2. **ไม่ทำ** — รอดูว่าเขาจะเพิ่ม ACP ไหม เหมือนที่ Gemini CLI, Kimi, opencode ทำไปแล้ว
+
+## สรุปรูปแบบการเชื่อมทั้งหมดที่เจอ
+
+| รูปแบบ | ตัวอย่าง | ต้องเขียนอะไร |
+|---|---|---|
+| **Protocol** (ACP stdio) | DSH · opencode · Claude Code · Gemini CLI · Kimi Code | ไม่ต้อง — ตั้งค่าอย่างเดียว |
+| **Protocol + config compiler** | `dsh` (preset) | `AcpLauncher` ตัวเดียว |
+| **Library** | Pi | adapter เต็ม |
+| **OpenAI-compatible endpoint** | zen · DeepSeek API · llm-gateway | adapter เต็ม (มีแล้ว) |
+| **Vendor headless protocol** | **Antigravity CLI** | adapter เต็ม + config compiler |
+| Protocol คนละ transport | Qwen Code (HTTP+SSE) | เพิ่ม transport ใน client เดิม |
