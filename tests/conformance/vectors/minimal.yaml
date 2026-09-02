@@ -1,0 +1,20 @@
+# ไม่ขออะไรเลยนอกจาก model
+#
+# target ที่ honour อะไรไม่ได้มาก ก็ยังต้องรันตัวนี้ได้
+apiVersion: agent/v1alpha2
+kind: Agent
+
+metadata:
+  name: vector-minimal
+  version: 0.1.0
+  description: "ไม่ขออะไรเลยนอกจาก model"
+
+spec:
+  purpose:
+    primary: conformance_vector
+
+  model:
+    preferred: [deepseek]
+
+  autonomy:
+    level: 1

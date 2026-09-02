@@ -1,0 +1,23 @@
+# autonomy 3 — ทำได้ทุกอย่างที่ไม่ติด policy
+#
+# ไม่มี tool ไหนต้องขออนุมัติ
+apiVersion: agent/v1alpha2
+kind: Agent
+
+metadata:
+  name: vector-actor
+  version: 0.1.0
+  description: "autonomy 3 — ทำได้ทุกอย่างที่ไม่ติด policy"
+
+spec:
+  purpose:
+    primary: conformance_vector
+
+  model:
+    preferred: [deepseek]
+
+  autonomy:
+    level: 3
+
+  tools:
+    allowed: [github.read, github.comment, github.merge]

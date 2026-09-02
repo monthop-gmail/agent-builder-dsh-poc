@@ -1,0 +1,23 @@
+# autonomy 0 — ไม่มีอะไรทำได้เองเลย
+#
+# tool ที่ effect เป็น read ก็ยังต้องขออนุมัติ ใช้ตรวจว่า autonomy 0 ต่างจาก 1 จริง
+apiVersion: agent/v1alpha2
+kind: Agent
+
+metadata:
+  name: vector-observer
+  version: 0.1.0
+  description: "autonomy 0 — ไม่มีอะไรทำได้เองเลย"
+
+spec:
+  purpose:
+    primary: conformance_vector
+
+  model:
+    preferred: [deepseek]
+
+  autonomy:
+    level: 0
+
+  tools:
+    allowed: [current_time]

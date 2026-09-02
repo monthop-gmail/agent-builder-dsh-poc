@@ -1,0 +1,23 @@
+# autonomy 1 — อ่านได้เอง
+#
+# เส้นฐาน: tool ที่ effect เป็น read ต้องไม่ติด approval
+apiVersion: agent/v1alpha2
+kind: Agent
+
+metadata:
+  name: vector-reader
+  version: 0.1.0
+  description: "autonomy 1 — อ่านได้เอง"
+
+spec:
+  purpose:
+    primary: conformance_vector
+
+  model:
+    preferred: [deepseek]
+
+  autonomy:
+    level: 1
+
+  tools:
+    allowed: [current_time, github.read]

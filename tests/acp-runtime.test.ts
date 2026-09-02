@@ -7,6 +7,7 @@ import { validateManifest, type AgentManifest } from "../builder/validator.js";
 import { compileManifest } from "../builder/compiler.js";
 import { AcpRuntime } from "../runtimes/acp/adapter.js";
 import { RunAborted } from "../builder/errors.js";
+import { compileVector } from "./conformance/vectors.js";
 import type { ApprovalRequest, TraceEvent } from "../builder/types.js";
 
 /**
@@ -140,8 +141,9 @@ describe("AcpRuntime", () => {
       "policy.forbidden",
       "tools.local",
     ]);
-    // A manifest with neither is fully supported.
-    expect(runtime.unsupported(await compiled("acp-plain.yaml", "fixtures"))).toEqual([]);
+    // A manifest with neither is fully supported. The shared `minimal`
+    // vector already is that manifest, so this does not keep a second copy.
+    expect(runtime.unsupported((await compileVector("minimal")).agent)).toEqual([]);
   });
 
   it("reports what already happened when the agent fails mid-run", async () => {

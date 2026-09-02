@@ -1,0 +1,23 @@
+# autonomy 2 — เขียนสิ่งที่ย้อนได้เอง
+#
+# write ทำเองได้ irreversible ต้องขออนุมัติ
+apiVersion: agent/v1alpha2
+kind: Agent
+
+metadata:
+  name: vector-proposer
+  version: 0.1.0
+  description: "autonomy 2 — เขียนสิ่งที่ย้อนได้เอง"
+
+spec:
+  purpose:
+    primary: conformance_vector
+
+  model:
+    preferred: [deepseek]
+
+  autonomy:
+    level: 2
+
+  tools:
+    allowed: [github.read, github.comment, github.merge]

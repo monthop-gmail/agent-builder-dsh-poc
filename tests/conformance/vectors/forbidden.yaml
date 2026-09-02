@@ -1,0 +1,26 @@
+# policy.forbidden — tool ที่ไม่มีวันไปถึง runtime
+#
+# หักที่ Builder ไม่ใช่ที่ runtime
+apiVersion: agent/v1alpha2
+kind: Agent
+
+metadata:
+  name: vector-forbidden
+  version: 0.1.0
+  description: "policy.forbidden — tool ที่ไม่มีวันไปถึง runtime"
+
+spec:
+  purpose:
+    primary: conformance_vector
+
+  model:
+    preferred: [deepseek]
+
+  autonomy:
+    level: 3
+
+  tools:
+    allowed: [github.read, github.comment, github.merge]
+
+  policy:
+    forbidden: [github.merge]

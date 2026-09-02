@@ -1,0 +1,26 @@
+# audit.required: true
+#
+# runtime ต้องส่ง trace event
+apiVersion: agent/v1alpha2
+kind: Agent
+
+metadata:
+  name: vector-audit-on
+  version: 0.1.0
+  description: "audit.required: true"
+
+spec:
+  purpose:
+    primary: conformance_vector
+
+  model:
+    preferred: [deepseek]
+
+  autonomy:
+    level: 1
+
+  tools:
+    allowed: [current_time]
+
+  audit:
+    required: true

@@ -1,0 +1,26 @@
+# audit ปิด — ต้องเงียบสนิท
+#
+# คู่ของ audit-on: ไม่ควรมี trace event หลุดออกมาเลย
+apiVersion: agent/v1alpha2
+kind: Agent
+
+metadata:
+  name: vector-audit-off
+  version: 0.1.0
+  description: "audit ปิด — ต้องเงียบสนิท"
+
+spec:
+  purpose:
+    primary: conformance_vector
+
+  model:
+    preferred: [deepseek]
+
+  autonomy:
+    level: 1
+
+  tools:
+    allowed: [current_time]
+
+  audit:
+    required: false

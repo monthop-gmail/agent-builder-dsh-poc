@@ -1,0 +1,23 @@
+# model.preferred หลายตัว
+#
+# ตัวแรกคือ model ที่ใช้ ที่เหลือเป็น fallback chain
+apiVersion: agent/v1alpha2
+kind: Agent
+
+metadata:
+  name: vector-fallback
+  version: 0.1.0
+  description: "model.preferred หลายตัว"
+
+spec:
+  purpose:
+    primary: conformance_vector
+
+  model:
+    preferred: [deepseek, glm, deepseek-reasoner]
+
+  autonomy:
+    level: 1
+
+  tools:
+    allowed: [current_time]
