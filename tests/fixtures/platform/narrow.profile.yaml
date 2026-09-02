@@ -1,0 +1,37 @@
+# A synthetic profile/v1 instance written in THIS repo's tool vocabulary.
+#
+# The real `coding-agent.profile.yaml` next to it is vendored verbatim and
+# speaks `tool/v1` ToolIds (`github.pr.merge`, `fs.file.read`); ours are
+# registry names (`github.merge`, `calculator`). The gap between the two is a
+# real finding, tested for on its own — this file exists so the combination
+# rules can be tested without that gap standing in the way.
+profile_id: narrow-reviewer
+display_name: Narrow Reviewer
+description: >-
+  A ceiling that allows reading and commenting, denies merging outright, and
+  wants a human on every comment.
+
+capability_requirement:
+  required:
+    - github
+  preferred:
+    - long_context
+
+tools:
+  allow:
+    - github.read
+    - github.comment
+    - current_time
+  deny:
+    - github.merge
+
+policy:
+  authority_map:
+    low: auto
+    medium: approval_required
+    high: human_command_required
+    critical: human_command_required
+  deny_capabilities:
+    - shell
+  require_human_for:
+    - github.comment

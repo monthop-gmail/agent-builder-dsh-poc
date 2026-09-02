@@ -3,6 +3,12 @@ import type { CompiledAgent, ModelBinding } from "./types.js";
 import { resolveCapabilities } from "./resolver.js";
 import { resolveModelChain } from "./registry/models.js";
 import { autonomyFor, decideCapabilities } from "./registry/policy.js";
+import {
+  assertBindingValid,
+  combinePolicies,
+  type AgentPolicyView,
+  type PlatformPolicy,
+} from "./platform.js";
 
 /**
  * Compiler: AgentManifest -> CompiledAgent.
@@ -16,13 +22,53 @@ export interface CompileResult {
   agent: CompiledAgent;
   /** Tools the manifest asked for that policy removed. */
   droppedByPolicy: string[];
+  /**
+   * Tools the manifest asked for that the platform profile never allowed.
+   *
+   * Reported apart from `droppedByPolicy` because the two answer different
+   * questions: one says "this agent refused it", the other says "this agent
+   * was never entitled to it". Folding them together would hide which party
+   * made the call, which is the whole subject of ADR-0022.
+   */
+  droppedByCeiling: string[];
   /** True when the model resolved straight to a provider, bypassing llm-gateway (B1). */
   bypassesGateway: boolean;
 }
 
-export function compileManifest(manifest: AgentManifest, manifestChecksum: string): CompileResult {
+export interface CompileOptions {
+  /**
+   * The platform ceiling, when the caller supplied one (`--profile`).
+   *
+   * Optional on purpose: a build with no profile behaves exactly as it did
+   * before this existed. The three-party rule cannot be enforced against a
+   * party that was never handed over, and pretending otherwise — defaulting
+   * to some built-in profile — would be this repo inventing platform policy,
+   * which is the one thing every issue we opened was about not doing.
+   */
+  platform?: PlatformPolicy;
+}
+
+export function compileManifest(
+  manifest: AgentManifest,
+  manifestChecksum: string,
+  options: CompileOptions = {},
+): CompileResult {
+  const agentPolicy: AgentPolicyView = {
+    denyTools: manifest.spec.policy?.forbidden ?? [],
+    denyCapabilities: manifest.spec.policy?.deniedCapabilities ?? [],
+    requireHumanFor: manifest.spec.humanApproval?.required ?? [],
+    toolsRequested: manifest.spec.tools?.allowed,
+    // Nothing yet: `capability_requirement` on the manifest side is the next
+    // piece of work and waits on nothing but our own hands. The rule below is
+    // already live against whatever the profile requires.
+    requiredCapabilities: [],
+  };
+
+  const effective = combinePolicies(agentPolicy, options.platform);
+  assertBindingValid(agentPolicy, effective, options.platform);
+
   const { tools, skills, mcpServers } = resolveCapabilities({
-    tools: manifest.spec.tools?.allowed,
+    tools: effective.toolsAllow,
     skills: manifest.spec.skills,
     mcp: manifest.spec.mcp?.servers,
   });
@@ -30,9 +76,9 @@ export function compileManifest(manifest: AgentManifest, manifestChecksum: strin
   const autonomy = autonomyFor(manifest.spec.autonomy.level);
   const decision = decideCapabilities({
     allowed: tools,
-    forbidden: manifest.spec.policy?.forbidden ?? [],
+    forbidden: effective.denyTools,
     autonomy,
-    humanApproval: manifest.spec.humanApproval?.required ?? [],
+    humanApproval: effective.requireHumanFor,
   });
 
   const [model, ...modelFallbacks] = resolveModelChain(manifest.spec.model.preferred) as [
@@ -48,20 +94,35 @@ export function compileManifest(manifest: AgentManifest, manifestChecksum: strin
       purpose: manifest.spec.purpose.primary,
       model,
       modelFallbacks,
-      systemPrompt: composeSystemPrompt(manifest, skills, decision.approvalRequired),
+      systemPrompt: composeSystemPrompt(manifest, skills, decision.approvalRequired, effective.denyTools),
       tools: decision.granted,
       skills,
       mcpServers,
       autonomy,
       approvalRequired: decision.approvalRequired,
+      // The EFFECTIVE policy, not the manifest's half of it. Tools that only
+      // appear once an MCP server is connected are filtered against this
+      // later (`admitLateTools`), so carrying the agent's own list here would
+      // let a ceiling-denied tool in through the one door compile time cannot
+      // see.
       policy: {
-        forbidden: manifest.spec.policy?.forbidden ?? [],
-        humanApproval: manifest.spec.humanApproval?.required ?? [],
+        forbidden: effective.denyTools,
+        humanApproval: effective.requireHumanFor,
+        deniedCapabilities: effective.denyCapabilities,
       },
+      ...(effective.profile
+        ? {
+            policySource: {
+              profileId: effective.profile.id,
+              profileChecksum: effective.profile.checksum,
+            },
+          }
+        : {}),
       audit: manifest.spec.audit?.required ?? false,
       manifestChecksum,
     },
     droppedByPolicy: decision.forbidden,
+    droppedByCeiling: effective.droppedByCeiling,
     bypassesGateway: model.route === "direct",
   };
 }
@@ -76,6 +137,7 @@ function composeSystemPrompt(
   manifest: AgentManifest,
   skills: { instructions: string }[],
   approvalRequired: string[],
+  forbidden: string[],
 ): string {
   const blocks: string[] = [];
 
@@ -84,7 +146,6 @@ function composeSystemPrompt(
   if (manifest.spec.system?.instructions) blocks.push(manifest.spec.system.instructions.trim());
   for (const skill of skills) blocks.push(skill.instructions);
 
-  const forbidden = manifest.spec.policy?.forbidden ?? [];
   const policyLines: string[] = [];
   if (forbidden.length) {
     policyLines.push(

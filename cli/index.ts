@@ -16,6 +16,7 @@ import {
   loadCatalog,
 } from "../builder/registry/models.js";
 import { AUTONOMY_LEVELS } from "../builder/registry/policy.js";
+import { loadPlatformProfile } from "../builder/platform.js";
 import type { ApprovalDecision, ApprovalRequest, TraceEvent } from "../builder/types.js";
 
 const USAGE = `agent-builder — build agents from an Agent Manifest, run them on any target
@@ -36,6 +37,9 @@ Options:
   --trace           Print audit trace events as they happen
   --audit-log <f>   Append the run and its trace to <f> as JSON Lines
   --resume <id>     Continue a session the target persisted, under this manifest
+  --profile <file>  A profile/v1 instance to use as the platform ceiling. The
+                    effective policy is the narrowest of it and the manifest —
+                    neither side can widen the other (agent-platform ADR-0022)
   --provider <name> Which catalog entry to query for live model ids (models)
 
 A runtime is a build target, not part of the agent: the same manifest builds
@@ -90,7 +94,11 @@ interface Prepared {
   gaps: GapReport;
 }
 
-async function loadAndCompile(path: string, target: string): Promise<Prepared> {
+async function loadAndCompile(
+  path: string,
+  target: string,
+  profilePath?: string,
+): Promise<Prepared> {
   const loaded = await loadManifest(resolve(path));
   const result = validateManifest(loaded.value);
 
@@ -99,8 +107,21 @@ async function loadAndCompile(path: string, target: string): Promise<Prepared> {
   if (!result.ok) throw new Error("manifest is invalid");
   out(`  ✓ manifest is valid (${loaded.checksum.slice(0, 12)}…)\n`);
 
-  const compiled = compileManifest(loaded.value as AgentManifest, loaded.checksum);
+  const platform = profilePath ? await loadPlatformProfile(resolve(profilePath)) : undefined;
+  if (platform) {
+    out(
+      `  ✓ ceiling: profile '${platform.profileId}' (${platform.checksum.slice(0, 12)}…)\n`,
+    );
+  }
 
+  const compiled = compileManifest(loaded.value as AgentManifest, loaded.checksum, { platform });
+
+  if (compiled.droppedByCeiling.length) {
+    out(
+      `  ⛔ outside the profile's allowlist: ${compiled.droppedByCeiling.join(", ")}\n` +
+        `      The manifest asked for these; the ceiling never granted them.\n`,
+    );
+  }
   if (compiled.droppedByPolicy.length) {
     out(`  ⛔ withheld by policy.forbidden: ${compiled.droppedByPolicy.join(", ")}\n`);
   }
@@ -234,7 +255,7 @@ async function main(): Promise<number> {
 
   let prepared: Prepared;
   try {
-    prepared = await loadAndCompile(args.manifest, effectiveTarget);
+    prepared = await loadAndCompile(args.manifest, effectiveTarget, flagString(args, "profile"));
   } catch (e) {
     err(`\n${(e as Error).message}\n`);
     return 1;

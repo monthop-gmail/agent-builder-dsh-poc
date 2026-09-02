@@ -140,6 +140,13 @@
                     "type": "string",
                     "minLength": 1
                   }
+                },
+                "deniedCapabilities": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  }
                 }
               },
               "required": [

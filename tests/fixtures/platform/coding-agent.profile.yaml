@@ -1,0 +1,70 @@
+# vendored from monthop-gmail/agent-platform profiles/coding-agent/profile.yaml
+# commit ff37b2f181e0757f8b1a293a01690d435271bfeb · 2026-09-02
+#
+# A TEST FIXTURE, not a pin. Whether a consumer may pin profiles/ at all is
+# the open half of agent-platform#47 — see docs/effective-policy.md.
+# Do not edit to make a test pass: fetch the file again instead.
+# $schema: ../../contracts/profile/v1/profile.schema.yaml
+profile_id: coding-agent
+display_name: Coding Agent
+description: >-
+  งานเขียน/แก้ code ที่จบด้วย PR ให้คนรีวิว — ใช้กับ devfactory-core และ agent-fleet
+  หลักการ: agent แก้ code ได้เต็มที่ใน sandbox แต่ **ห้ามแตะ production เอง**
+  จุดตัดสินย้ายไปอยู่ที่ PR review ซึ่งเป็นกลไกที่ทีมใช้อยู่แล้ว
+
+capability_requirement:
+  required:
+    - code_execution
+    - filesystem
+    - git
+  preferred:
+    - github
+    - shell
+    - long_context
+  constraints:
+    max_cost_usd: 5.0
+
+tools:
+  allow:
+    - github.issue.read
+    - github.pr.create
+    - github.pr.comment
+    - git.branch.create
+    - git.commit.create
+    - fs.file.read
+    - fs.file.write
+    - shell.execute
+    - test.run
+  deny:
+    - github.pr.merge          # merge เป็นของคน ไม่ใช่ของ agent
+    - deploy.production.run
+    - secret.read
+
+execution:
+  preferred_mode: provider     # Claude Code / Codex / OpenCode ทำงานนี้ได้ดีอยู่แล้ว
+  min_observability_depth: turn
+  max_duration_seconds: 3600
+  max_attempts: 2
+
+policy:
+  authority_map:
+    low: auto
+    medium: auto               # แก้ไฟล์ใน sandbox ไม่ต้องขออนุมัติ
+    high: approval_required
+    critical: human_command_required
+  deny_capabilities:
+    - autonomous_execution     # ต้องมีคนสั่งเริ่มงานเสมอ
+  require_human_for:
+    - github.pr.merge
+    - deploy.production.run
+
+budget:
+  max_cost_usd_per_execution: 5.0
+  max_cost_usd_per_day: 100.0
+
+delegation:
+  enabled: true
+  allowed_profiles: [knowledge-agent]   # ถามความรู้ได้ แต่มอบงานเขียน code ต่อไม่ได้
+  max_depth: 2
+
+artifact_retention_days: 90
