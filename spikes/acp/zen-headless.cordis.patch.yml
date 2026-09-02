@@ -1,0 +1,19 @@
+# Route the real DeepSeek Harness through opencode zen (OpenAI-compatible).
+- id: llm-pi-ai
+  config:
+    providers:
+      zen:
+        displayName: opencode zen
+        apiKeyEnv: OPENCODE_ZEN_API_KEY
+        baseURL: https://opencode.ai/zen/v1
+        api: openai-completions
+        models:
+          - id: nemotron-3-ultra-free
+            contextWindow: 200000
+          - id: mimo-v2.5-free
+            contextWindow: 200000
+
+- id: agent-default-model
+  config:
+    provider: zen
+    model: nemotron-3-ultra-free
