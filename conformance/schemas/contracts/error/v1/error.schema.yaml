@@ -1,0 +1,48 @@
+$schema: https://json-schema.org/draft/2020-12/schema
+$id: https://schemas.agent-platform.internal/error/v1/error.schema.yaml
+title: Error
+description: >-
+  error taxonomy ที่ทุก plane ใช้ร่วมกัน — เพื่อให้ retry policy และ audit
+  ตัดสินใจจาก category ได้โดยไม่ต้อง parse ข้อความ
+
+$defs:
+  Category:
+    enum:
+      - validation           # input ผิดรูป — retry ไม่ช่วย
+      - authentication       # ไม่รู้ว่าเป็นใคร
+      - authorization        # รู้ว่าเป็นใคร แต่ไม่มีสิทธิ์
+      - policy_denied        # policy ปฏิเสธ — ต่างจาก authorization ตรงที่เป็นกฎ ไม่ใช่สิทธิ์
+      - approval_required    # ต้องรออนุมัติก่อน ไม่ใช่ error ถาวร
+      - rate_limited
+      - budget_exceeded
+      - timeout
+      - conflict
+      - provider_error       # ฝั่ง model/agent provider พัง
+      - external_dependency  # ระบบปลายทางพัง เช่น Odoo, GitHub
+      - internal
+
+type: object
+required: [code, category, message, retryable]
+properties:
+  code:
+    type: string
+    pattern: '^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$'
+    description: เช่น `policy.denied.tool_not_allowed` — ใช้ผูกกับ runbook ได้
+  category:
+    $ref: '#/$defs/Category'
+  message:
+    type: string
+    description: >-
+      ข้อความสำหรับมนุษย์ — **ห้ามใส่ credential, PII หรือเนื้อหา prompt ของผู้ใช้**
+  retryable:
+    type: boolean
+    description: >-
+      platform ใช้ค่านี้ตัดสิน retry — ไม่ใช่เดาจาก category
+      tool ที่ `idempotent: false` จะไม่ถูก retry แม้ค่านี้เป็น true
+  retry_after_seconds:
+    type: integer
+    minimum: 0
+  details:
+    type: object
+  correlation_id:
+    $ref: https://schemas.agent-platform.internal/identity/v1/identity.schema.yaml#/$defs/Id

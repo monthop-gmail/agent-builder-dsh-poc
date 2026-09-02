@@ -1,0 +1,48 @@
+# release gate — ADR-0006 requirement 3
+#
+# `conformance` is the job that has to be a required check in branch
+# protection. This file cannot enforce that; it is a repo setting, and
+# platform-contract.yaml says so rather than implying the file is enough.
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+
+  conformance:
+    # ADR-0006: validate real payloads against the pinned schemas, every PR.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: npm ci
+      - run: npm run conformance
+
+  drift:
+    # Kept OUT of the gate on purpose: it needs the network, and a red build
+    # caused by GitHub being slow teaches people to stop believing red.
+    # `continue-on-error` makes it a signal, not a blocker.
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: npm ci
+      - run: npm run conformance:drift

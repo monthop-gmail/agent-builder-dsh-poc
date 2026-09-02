@@ -1,0 +1,152 @@
+$schema: https://json-schema.org/draft/2020-12/schema
+$id: https://schemas.agent-platform.internal/profile/v1/profile.schema.yaml
+title: Agent Profile
+description: >-
+  ชุด configuration ที่ประกอบ contract ตัวอื่นเข้าด้วยกันสำหรับงานประเภทหนึ่ง
+  **contract เดียวกัน แต่ profile ต่างกัน** — profile ไม่ได้เพิ่มความสามารถใหม่
+  แต่กำหนดว่า agent ประเภทนี้ใช้อะไรได้และต้องขออนุมัติเมื่อไหร่
+
+  profile เป็น "เพดาน" ไม่ใช่ "การอนุญาต" — สิทธิ์จริงคือส่วนที่ profile, agent
+  และ policy ของ tenant ตกลงตรงกันทั้งสามฝ่าย ค่าที่กว้างที่สุดชนะไม่ได้
+
+type: object
+required: [profile_id, display_name, policy]
+properties:
+  profile_id:
+    $ref: https://schemas.agent-platform.internal/identity/v1/identity.schema.yaml#/$defs/Id
+  display_name:
+    type: string
+  description:
+    type: string
+  extends:
+    $ref: https://schemas.agent-platform.internal/identity/v1/identity.schema.yaml#/$defs/Id
+    description: >-
+      สืบทอดจาก profile อื่น — การสืบทอด **ทำให้แคบลงได้อย่างเดียว**
+      profile ลูกที่พยายามเปิดสิ่งที่พ่อปิดไว้ถือว่าผิด contract
+
+  capability_requirement:
+    $ref: https://schemas.agent-platform.internal/capability/v1/requirement.schema.yaml
+    description: capability ที่งานประเภทนี้ต้องการ — ใช้ route หา provider ที่ทำได้
+
+  tools:
+    type: object
+    description: >-
+      **เพดานเชิงชื่อ — ผูกกับ namespace ที่มันตั้งชื่อ**
+      ([ADR-0026](../../../decisions/0026-tool-identity-ceiling-is-namespace-bound.md))
+
+      profile ที่เขียนด้วยชื่อจาก namespace หนึ่ง เอาไปใช้กับ agent ที่มี tool อีก namespace
+      จะ**จำกัดเกินและปกป้องไม่พอพร้อมกัน** — `allow` ไม่ตรงเลย = ไม่มี tool เหลือ
+      (fail closed เห็นทันที) ส่วน `deny` ไม่ตรงเลย = **ไม่ปิดอะไรเลย** (fail open เงียบ ๆ)
+
+      🔒 กฎที่ implementation ต้องบังคับ — JSON Schema ตรวจให้ไม่ได้
+
+      · **ไม่มี `allow` = ไม่มีเพดานเชิงชื่อ** เพดานมาจาก capability และ `authority_map`
+      · **`allow: []` = ไม่อนุญาต tool ใดเลย** — ต่างกัน ไม่ใช่สองวิธีเขียนสิ่งเดียวกัน
+
+      · **`allow` ที่ไม่ตรงกับ tool ของ agent เลยสักตัว = profile ถูกใช้ผิด namespace
+      → reject การผูก ไม่ใช่ปล่อยให้กลายเป็น deny-all เงียบ ๆ** หลักเดียวกับที่ `consent/v1`
+      ให้ reject เมื่อ tenant ไม่ตรง และ [ADR-0022](../../../decisions/0022-agent-may-narrow-its-own-scope.md)
+      ให้ reject เมื่อ `required` ตัดกับ `deny`
+
+      · **`deny` และ `require_human_for` ที่เขียนด้วยชื่อ ปกป้องเฉพาะ namespace ที่มันตั้งชื่อ**
+      — การปกป้องที่พกพาได้ข้าม registry ต้องเขียนด้วย `policy.deny_capabilities`
+      หรือ `policy.authority_map` ซึ่งอ้างคำศัพท์กลางที่ทุก tool ประกาศไว้อยู่แล้ว
+    properties:
+      allow:
+        type: array
+        description: >-
+          allowlist ของ tool — **`[]` = ไม่อนุญาต tool ใดเลย ไม่ใช่ "อนุญาตทั้งหมด"**
+          · **ไม่มี field นี้เลย = ไม่มีเพดานเชิงชื่อ** (ดูกฎในคำอธิบายของ `tools`)
+        items:
+          $ref: https://schemas.agent-platform.internal/tool/v1/tool.schema.yaml#/$defs/ToolId
+      deny:
+        type: array
+        description: >-
+          ชนะ allow เสมอ — ใช้ตัดเฉพาะรายการออกจาก allow ที่กว้าง
+          ⚠️ **ปกป้องเฉพาะ namespace ที่มันตั้งชื่อ** · `deny` ที่ไม่ตรงกับ tool ของ agent
+          ไม่ได้แปลว่าปลอดภัย แปลว่าไม่ได้ปกป้องอะไรเลย
+        items:
+          $ref: https://schemas.agent-platform.internal/tool/v1/tool.schema.yaml#/$defs/ToolId
+
+  execution:
+    type: object
+    properties:
+      preferred_mode:
+        enum: [native, provider, any]
+        default: any
+        description: >-
+          คำใบ้ให้ router ไม่ใช่คำสั่ง — ถ้าไม่มีทางเลือกที่ตรง router เลือกทางที่
+          satisfy capability ได้ก่อน (ADR-0005 C2)
+      min_observability_depth:
+        enum: [step, turn]
+        default: turn
+        description: >-
+          ตั้ง `step` เมื่องานนี้ต้อง audit ละเอียด — จะตัด external provider
+          ที่ให้ได้แค่ turn ออกจากตัวเลือกโดยอัตโนมัติ
+      max_duration_seconds:
+        type: integer
+        minimum: 1
+      max_attempts:
+        type: integer
+        minimum: 1
+        default: 1
+
+  policy:
+    type: object
+    required: [authority_map]
+    properties:
+      authority_map:
+        type: object
+        description: >-
+          `action_risk` → `authority` (ADR-0010) — **ต้องเป็น config แบบนี้ ห้าม hard-code**
+          tenant หนึ่งอาจให้ high = approval_required อีก tenant ให้ high = human_command_required
+          ค่าที่ไม่ระบุ ให้ fallback เป็น `human_command_required`
+        additionalProperties: false
+        properties:
+          low: { $ref: '#/$defs/Authority' }
+          medium: { $ref: '#/$defs/Authority' }
+          high: { $ref: '#/$defs/Authority' }
+          critical: { $ref: '#/$defs/Authority' }
+      deny_capabilities:
+        type: array
+        description: >-
+          capability ที่ห้ามใช้ในงานประเภทนี้ แม้ provider จะทำได้
+
+          🔗 **tool ที่ `required_capabilities` ตัดกับรายการนี้ ใช้ไม่ได้**
+          ([ADR-0026](../../../decisions/0026-tool-identity-ceiling-is-namespace-bound.md))
+          — `tool/v1` ประกาศ `required_capabilities` ไว้แล้วตั้งแต่ v1.0.0
+          แต่ไม่เคยมีกฎบอกว่าสองอย่างนี้ประกอบกันยังไง
+
+          นี่คือ **เพดานที่ทำงานกับ tool registry ที่ platform ไม่เคยเห็น** — ต่างจาก
+          `tools.deny` ที่ผูกกับชื่อและปกป้องได้เฉพาะ namespace ของตัวเอง
+        items:
+          $ref: https://schemas.agent-platform.internal/capability/v1/capability.schema.yaml#/$defs/CapabilityId
+      require_human_for:
+        type: array
+        description: tool ที่ต้องให้คนสั่งเสมอ ไม่ว่า action_risk จะเป็นเท่าไร
+        items:
+          $ref: https://schemas.agent-platform.internal/tool/v1/tool.schema.yaml#/$defs/ToolId
+
+  budget:
+    type: object
+    properties:
+      max_cost_usd_per_execution: { type: number, minimum: 0 }
+      max_cost_usd_per_day: { type: number, minimum: 0 }
+
+  delegation:
+    type: object
+    properties:
+      enabled: { type: boolean, default: false }
+      allowed_profiles:
+        type: array
+        items:
+          $ref: https://schemas.agent-platform.internal/identity/v1/identity.schema.yaml#/$defs/Id
+      max_depth: { type: integer, minimum: 1, default: 1 }
+
+  artifact_retention_days:
+    type: integer
+    minimum: 1
+
+$defs:
+  Authority:
+    $ref: https://schemas.agent-platform.internal/policy/v1/policy-decision.schema.yaml#/$defs/Authority

@@ -1,0 +1,25 @@
+# commit ของ agent-platform ที่ schema ใน conformance/schemas/ ถูกคัดลอกมา
+#
+# ทำไม vendor แทนที่จะ fetch สด: conformance ต้องได้ผลเดิมทุกครั้งและรันได้แม้ออฟไลน์
+# ถ้าดึงสดทุกรอบ CI จะแดงเพราะเน็ตล่ม ซึ่งสอนคนให้เลิกเชื่อสีแดง — บทเรียนเดียว
+# กับที่ agent-platform เพิ่งแก้ใน #49 (แยก 404 ออกจาก "ตรวจไม่ได้")
+#
+# การตรวจว่า vendored copy ยังตรงกับต้นทางเป็นคนละงาน ทำด้วย `npm run conformance:drift`
+# ซึ่งออกเน็ตและรันแยกจาก payload check
+repo: monthop-gmail/agent-platform
+commit: 5bb4a390887cf406f5e46aa051c31e5a7fe7c608
+fetched_at: 2026-09-03
+schemas:
+  - contracts/agent/v1/agent.schema.yaml
+  - contracts/capability/v1/capability.schema.yaml
+  - contracts/consent/v1/consent.schema.yaml
+  - contracts/capability/v1/declaration.schema.yaml
+  - contracts/capability/v1/requirement.schema.yaml
+  - contracts/error/v1/error.schema.yaml
+  - contracts/execution/v1/execution.schema.yaml
+  - contracts/identity/v1/identity.schema.yaml
+  - contracts/model/v1/inference.schema.yaml
+  - contracts/policy/v1/policy-decision.schema.yaml
+  - contracts/profile/v1/profile.schema.yaml
+  - contracts/tool/v1/tool.schema.yaml
+  - contracts/artifact/v1/artifact.schema.yaml

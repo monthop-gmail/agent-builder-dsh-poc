@@ -5,5 +5,5 @@
   // base's "tests" exclusion has to be overridden here or this config would
   // silently check nothing.
   "exclude": ["node_modules", "dist"],
-  "include": ["builder/**/*.ts", "runtimes/**/*.ts", "cli/**/*.ts", "scripts/**/*.ts", "tests/**/*.ts"]
+  "include": ["builder/**/*.ts", "runtimes/**/*.ts", "cli/**/*.ts", "scripts/**/*.ts", "tests/**/*.ts", "conformance/**/*.ts"]
 }

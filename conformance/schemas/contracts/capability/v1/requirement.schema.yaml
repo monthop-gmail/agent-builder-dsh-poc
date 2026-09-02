@@ -1,0 +1,38 @@
+$schema: https://json-schema.org/draft/2020-12/schema
+$id: https://schemas.agent-platform.internal/capability/v1/requirement.schema.yaml
+title: Capability Requirement
+description: >-
+  task ระบุว่าต้องการอะไร เพื่อให้ router หา subject ที่ satisfy ได้ (ADR-0009)
+  แยกจาก declaration เพราะเป็นคนละทิศ — declaration คือ "ฉันมี" requirement คือ "ฉันต้องการ"
+  การแยกนี้ทำให้ `agent: auto` เป็นไปได้
+
+type: object
+properties:
+  required:
+    type: array
+    description: hard requirement — subject ที่ขาดข้อใดข้อหนึ่งถูกตัดออก
+    items:
+      $ref: https://schemas.agent-platform.internal/capability/v1/capability.schema.yaml#/$defs/CapabilityId
+  preferred:
+    type: array
+    description: soft requirement — ใช้จัดอันดับ ไม่ใช่ตัดออก
+    items:
+      $ref: https://schemas.agent-platform.internal/capability/v1/capability.schema.yaml#/$defs/CapabilityId
+  constraints:
+    type: object
+    description: เงื่อนไขที่ไม่ใช่ capability แต่ใช้เลือกเหมือนกัน
+    properties:
+      max_cost_usd:
+        type: number
+        minimum: 0
+      max_latency_ms:
+        type: integer
+        minimum: 0
+      min_context_tokens:
+        type: integer
+        minimum: 1
+      pin_provider:
+        type: string
+        description: >-
+          บังคับ provider ตัวใดตัวหนึ่ง — ใช้เมื่อจำเป็นจริงเท่านั้น
+          การ pin ทำให้ routing ตาม capability ไม่ทำงาน

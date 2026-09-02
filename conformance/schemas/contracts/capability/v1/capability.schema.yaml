@@ -1,0 +1,86 @@
+$schema: https://json-schema.org/draft/2020-12/schema
+$id: https://schemas.agent-platform.internal/capability/v1/capability.schema.yaml
+title: Capability Taxonomy
+description: >-
+  รายการ capability ที่ platform รู้จัก พร้อมนิยามและระดับความเสี่ยง (ADR-0009)
+  capability คือ "ทำอะไรได้" — ไม่ใช่ "ใครให้บริการ" (นั่นคือ provider/v1)
+  เพิ่มค่าใหม่ใน enum = ไม่ breaking · ลบหรือเปลี่ยนความหมาย = breaking (ADR-0006)
+
+$defs:
+  CapabilityId:
+    description: >-
+      taxonomy กลาง — consumer ที่เจอค่าที่ไม่รู้จักต้องถือว่า "ไม่มี" ไม่ใช่ "มี" (ADR-0009)
+    enum:
+      - code_execution
+      - shell
+      - filesystem
+      - git
+      - github
+      - browser
+      - mcp
+      - vision
+      - long_context
+      - streaming
+      - autonomous_execution
+      - docker
+      - network_egress
+      # tool_calling = model ปล่อย tool call ออกมาได้ไหม — คุณสมบัติของ provider
+      # เหมือน vision/long_context/streaming ([ADR-0024](../../../decisions/0024-tool-calling-and-canonical-scope.md))
+      # ⚠️ คนละเรื่องกับ mcp/github/browser ซึ่งคือ "มี tool อะไรให้เรียก"
+      #    model ที่ tool_calling ไม่ได้ เรียก github ไม่ได้แม้ tool นั้นจะต่ออยู่
+      - tool_calling
+
+  # ── แผนที่ id → scope ที่เป็นทางการ ─────────────────────────────────────
+  # ทุก catalog ต้องยึดค่านี้ ห้ามตัดสินเอง
+  # ([ADR-0024](../../../decisions/0024-tool-calling-and-canonical-scope.md))
+  #
+  # เดิม `scope` เป็น field ของแต่ละรายการใน catalog แปลว่าคนทำ catalog ตัดสินเอง
+  # กฎ "capability ตัวเดียวกันอยู่ได้แค่ scope เดียว" จึงไม่มีอะไรทำให้จริง
+  # และวันนี้ยังไม่มีใครตอบได้ด้วยซ้ำว่า `github` อยู่ scope ไหน
+  #
+  # 🔒 แผนที่นี้ list ค่าซ้ำกับ CapabilityId โดยจำเป็น (JSON Schema derive ไม่ได้)
+  #    จึงบังคับด้วย drift_check ว่า keys ทั้งหมดรวมกันต้องเท่ากับ enum เป๊ะ
+  #    ขาด = มีค่าที่ไม่มีใครบอกว่าอยู่ scope ไหน · เกิน = ค่าที่ไม่อยู่ใน taxonomy แล้ว
+  #    ซ้ำ = ละเมิดกฎ "ตัวเดียวกันอยู่ได้แค่ scope เดียว" ตรง ๆ
+  canonical_scope:
+    provider:   [vision, long_context, streaming, tool_calling]
+    host:       [code_execution, shell, filesystem, docker, network_egress]
+    tool:       [git, github, browser, mcp]
+    # ⚠️ autonomous_execution ไม่ใช่ความสามารถทางเทคนิค แต่เป็น **ระดับอำนาจ**
+    #    จึงไม่เข้ากับสาม scope ที่ ADR-0009 นิยามไว้ · บันทึกไว้เป็นข้อยกเว้นที่รู้แล้ว
+    #    ไม่ยัดเข้ากลุ่มใดกลุ่มหนึ่งเพื่อให้ตารางสวย · การจัดที่ให้มันต้องเป็น ADR ของตัวเอง
+    #    เพราะแตะนิยามของ CapabilityScope ที่ frozen อยู่ใน ADR-0009
+    unscoped:   [autonomous_execution]
+
+  CapabilityScope:
+    description: >-
+      3 ระดับที่ห้ามปนกัน (ADR-0009) — capability ตัวเดียวกันอยู่ได้แค่ scope เดียว
+    enum:
+      - provider   # ความสามารถของ model/agent provider เช่น long_context, vision
+      - host       # ความสามารถของ worker ที่รัน เช่น docker, network_egress
+      - tool       # ความสามารถที่มาจาก tool ที่ต่ออยู่ เช่น github, browser
+
+  ActionRisk:
+    description: >-
+      ความเสียหายถ้าทำผิด — static ผูกกับ capability/tool ไม่ใช่กับ request (ADR-0010)
+      ห้ามสับสนกับ `authority` (policy/v1) และ `severity` (domain กำหนดเอง)
+      consumer ที่เจอค่าที่ไม่รู้จักต้อง fallback เป็น `critical`
+    enum: [low, medium, high, critical]
+
+type: object
+description: หนึ่งรายการใน catalog
+required: [id, scope, action_risk, description]
+properties:
+  id:
+    $ref: '#/$defs/CapabilityId'
+  scope:
+    $ref: '#/$defs/CapabilityScope'
+  action_risk:
+    $ref: '#/$defs/ActionRisk'
+  description:
+    type: string
+  requires:
+    type: array
+    description: capability ที่ต้องมีร่วมด้วยจึงจะมีความหมาย เช่น `git` ต้องมี `filesystem`
+    items:
+      $ref: '#/$defs/CapabilityId'

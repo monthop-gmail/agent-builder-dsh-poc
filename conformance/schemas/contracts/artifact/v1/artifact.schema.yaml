@@ -1,0 +1,45 @@
+$schema: https://json-schema.org/draft/2020-12/schema
+$id: https://schemas.agent-platform.internal/artifact/v1/artifact.schema.yaml
+title: Artifact
+description: >-
+  ผลผลิตที่จับต้องได้จาก execution — file, diff, PR, report, log
+  แยกจาก execution result เพราะ artifact มีอายุ ความเป็นเจ้าของ และ retention ของตัวเอง
+
+type: object
+required: [artifact_id, tenant_id, type, created_at]
+properties:
+  artifact_id:
+    $ref: https://schemas.agent-platform.internal/identity/v1/identity.schema.yaml#/$defs/Id
+  tenant_id:
+    $ref: https://schemas.agent-platform.internal/identity/v1/identity.schema.yaml#/$defs/TenantId
+  workspace_id:
+    $ref: https://schemas.agent-platform.internal/identity/v1/identity.schema.yaml#/$defs/WorkspaceId
+  execution_id:
+    $ref: https://schemas.agent-platform.internal/identity/v1/identity.schema.yaml#/$defs/ExecutionId
+  type:
+    enum: [file, diff, pull_request, report, log, dataset, image]
+  uri:
+    type: string
+    description: >-
+      ตัวชี้ไปยังที่เก็บจริง — **ห้ามฝังเนื้อหาขนาดใหญ่ในตัว contract**
+      artifact ที่เป็นความลับต้องเก็บใน storage ที่ enforce tenant isolation เอง
+  media_type:
+    type: string
+  size_bytes:
+    type: integer
+    minimum: 0
+  checksum:
+    type: object
+    properties:
+      algorithm: { enum: [sha256, sha512] }
+      value: { type: string }
+  produced_by:
+    $ref: https://schemas.agent-platform.internal/identity/v1/identity.schema.yaml#/$defs/Principal
+  created_at:
+    type: string
+    format: date-time
+  retention:
+    type: object
+    properties:
+      expires_at: { type: string, format: date-time }
+      legal_hold: { type: boolean, default: false }

@@ -1,0 +1,54 @@
+$schema: https://json-schema.org/draft/2020-12/schema
+$id: https://schemas.agent-platform.internal/capability/v1/declaration.schema.yaml
+title: Capability Declaration
+description: >-
+  provider / agent / worker ประกาศว่าตัวเองทำอะไรได้ (ADR-0009)
+  provider/v1 ห้ามมี field `capabilities` ของตัวเอง ต้องอ้างมาที่นี่
+  เพื่อไม่ให้ประกาศซ้ำสองที่แล้วไม่ตรงกัน
+
+type: object
+required: [subject, capabilities]
+properties:
+  subject:
+    type: object
+    description: >-
+      ใครเป็นคนประกาศ — `subject` ที่นี่คือ **สิ่งที่ declaration นี้เกี่ยวกับ**
+      ซึ่งตรงกับคำวินิจฉัยใน [ADR-0017](../../../decisions/0017-the-word-subject.md) · ผู้กระทำใน `policy/v1` ใช้ `actor`
+    required: [kind, id]
+    properties:
+      kind:
+        enum: [model_provider, agent_provider, worker, agent]
+      id:
+        $ref: https://schemas.agent-platform.internal/identity/v1/identity.schema.yaml#/$defs/Id
+  capabilities:
+    type: array
+    minItems: 0
+    items:
+      type: object
+      required: [id]
+      properties:
+        id:
+          $ref: https://schemas.agent-platform.internal/capability/v1/capability.schema.yaml#/$defs/CapabilityId
+        constraints:
+          type: object
+          description: ข้อจำกัดของ capability นี้เฉพาะ subject นี้
+          properties:
+            max_context_tokens:
+              type: integer
+              minimum: 1
+            max_concurrent:
+              type: integer
+              minimum: 1
+            allowed_hosts:
+              type: array
+              items: { type: string }
+              description: ใช้กับ network_egress — allowlist ระดับ host
+  declared_at:
+    type: string
+    format: date-time
+  verified_at:
+    type: string
+    format: date-time
+    description: >-
+      ครั้งล่าสุดที่ตรวจจริงว่าทำได้ (health check / probe)
+      ถ้าไม่มีค่านี้ ให้ถือว่าเป็นการประกาศที่ยังไม่ผ่านการยืนยัน
