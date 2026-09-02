@@ -137,9 +137,15 @@ capability ข้ามเส้นนั้นได้ เพราะทุ�
 (ADR-0026 ข้อ 2) รายงานแยกจาก `droppedByPolicy` เพราะเป็นคนละข้อเท็จจริง —
 *"มีคนเอ่ยชื่อ tool นี้"* กับ *"tool นี้ต้องใช้สิ่งที่ห้ามไว้"* และมีแค่อย่างหลังที่เดินทางข้ามบ้านได้
 
-**ที่ยังทำไม่ได้:** profile ที่ pin ชื่อ tool ไว้ (`tools.allow`) ยังใช้ข้าม namespace ไม่ได้อยู่ดี
-— reject ตามข้อ 3 นั่นถูกแล้ว ไม่ใช่สิ่งที่ต้องแก้ · เพดานที่พกพาได้ต้องเขียนด้วย capability
-หรือ `action_risk` ตามที่ ADR-0026 ข้อ 4 บอก
+**เพดานเชิงชื่อเทียบกันใน ToolId space** — profile พูด `tool/v1` `ToolId` เสมอ เพราะมันมาจาก
+platform ที่ไม่เคยรู้จักชื่อภายในของ registry นี้ · Builder จึงแปลงชื่อภายในเป็น wire id
+ก่อนเทียบ แล้วแปลงกลับเป็นชื่อภายในตอนส่งให้ registry (`builder/tool-ids.ts` · #59 option A)
+
+ผลคือ profile ที่เขียน `time.now` คุม `current_time` ของเราได้ — ซึ่งเทียบสตริงตรง ๆ ทำไม่ได้
+
+**ที่ยังทำไม่ได้และไม่ควรพยายาม:** profile ที่ allow `github.issue.read` ยังใช้กับ registry ที่มี
+`github.read` ไม่ได้ — **คนละ tool ไม่ใช่ tool เดียวกันสะกดต่างกัน** mapping กลบตรงนั้นไม่ได้
+และไม่ควรกลบ · reject ตามข้อ 3 นั่นถูกแล้ว
 
 **`capability_requirement` ฝั่ง manifest** — ✅ ทำแล้ว `spec.capabilities.required`
 เข้าไปอยู่ในกฎ `required ∩ deny` แล้ว ทั้งสองฝ่ายจึงอยู่ใน union จริงตามที่ ADR-0022 เขียน

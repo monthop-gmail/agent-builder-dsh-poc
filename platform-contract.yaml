@@ -10,6 +10,8 @@
 platform_contract_version: "0.1"
 
 contracts:
+  - agent/v1         # record ที่ Builder ปล่อยได้จาก manifest — validate ทุกใบใน compatibility set
+  - tool/v1          # `ToolId` บน wire · map จากชื่อภายในที่ builder/tool-ids.ts จุดเดียว
   - capability/v1    # taxonomy 14 ค่า + canonical_scope ที่ tool และ manifest ใช้เรียกความสามารถ
   - profile/v1       # เพดานที่ `--profile` รับเข้ามา แล้วรวมกับ policy ของ agent
   - execution/v1     # `provider_switches` + `provider_id` จากการรันจริง
@@ -41,19 +43,6 @@ pinned_contracts_commit: 6cb0b795988d6b0b353929b0f028309b4c0d7838   # conformanc
 # ─────────────────────────────────────────────────────────────────────────────
 
 not_pinned:
-  agent/v1:
-    reason: >-
-      ยัง validate ไม่ผ่านเพราะ `tool/v1` `ToolId` บังคับชื่อที่มีจุด
-      (`^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$`) แต่ Tool Registry ของ repo นี้มีชื่อเปล่า
-      อยู่ด้วย (`calculator` · `current_time` · `web_search`) — เห็นได้จากผลรันของ
-      conformance/payload-check.ts ที่วัดข้อนี้ทุกรอบแม้จะไม่ pin
-    blocked_by: >-
-      การเปลี่ยนชื่อ tool เป็น breaking change ของ `agent/v1alpha2` ตาม
-      docs/contract-stability.md — manifest ที่มีอยู่จะ build ไม่ผ่าน ต้องขึ้น version
-      ใหม่พร้อม migration ไม่ใช่แก้เงียบ ๆ
-    tracked_at: docs/effective-policy.md
-  tool/v1:
-    reason: ผลพวงข้อเดียวกัน — ชื่อ tool ของเรายังไม่ใช่ `ToolId` ที่ถูกต้อง
   model/v1:
     reason: >-
       ทำตาม `platform_rules` ทั้งสามข้อแล้ว (binding มาจาก capability requirement ·
@@ -72,14 +61,6 @@ not_pinned:
 # ─────────────────────────────────────────────────────────────────────────────
 
 known_gaps:
-  - id: bare-tool-names
-    what: >-
-      `calculator` `current_time` `web_search` ไม่ใช่ `tool/v1` `ToolId` ที่ถูกต้อง
-      ทำให้ทั้ง `agent/v1` record และ profile fixture ของเราเอง validate ไม่ผ่าน
-    measured_by: conformance/payload-check.ts
-    note: >-
-      payload-check **จะ fail ถ้าช่องว่างนี้หายไปเอง** เพื่อไม่ให้บันทึกนี้ค้างอยู่หลังจาก
-      มันถูกแก้แล้ว — เอกสารที่ไม่มีอะไรทำให้มันผิดออกมาดัง ๆ จะเก่าเสมอ
   - id: no-tenancy-in-manifest
     what: >-
       `agent/v1alpha2` ไม่มี `tenant_id` / `workspace_id` เลย ทั้งที่ ADR-0007 บังคับ
@@ -89,10 +70,35 @@ known_gaps:
       freeze อยู่ และการเพิ่ม required field เป็น breaking
 
 # ─────────────────────────────────────────────────────────────────────────────
+# ปิดไปแล้ว
+# ─────────────────────────────────────────────────────────────────────────────
+
+closed_gaps:
+  - id: bare-tool-names
+    was: >-
+      `calculator` `current_time` `web_search` ไม่ใช่ `ToolId` ที่ถูกต้อง จึง pin
+      `agent/v1` และ `tool/v1` ไม่ได้ · เคยประเมินว่าต้อง bump `agent/v1alpha2`
+    closed_by: >-
+      [#59](https://github.com/monthop-gmail/agent-platform/issues/59) option A — ชื่อภายใน
+      กับชื่อบน wire ไม่ต้องเป็นชื่อเดียวกัน · map ที่ `builder/tool-ids.ts` จุดเดียว
+      **ไม่ต้อง bump manifest เลย** เพราะไม่มีอะไรที่ผู้ใช้เขียนเปลี่ยน
+    note: >-
+      ระหว่างทางพบว่าการเติม namespace อย่างเดียวไม่พอ — probe MCP server จริงสองตัว
+      (29/29 ชื่อเปล่า) และเจอ server ที่ใช้ kebab-case กับ SCREAMING_SNAKE ซึ่ง
+      character class ของ `ToolId` ปฏิเสธด้วย · mapping จึงต้อง sanitize และ
+      **ชนกันแล้ว reject ไม่ใช่เลือกอันใดอันหนึ่งเงียบ ๆ** · รายงานไว้ใน #59 แล้ว
+
+# ─────────────────────────────────────────────────────────────────────────────
 # ที่ยังไม่มีคำตอบจาก platform
 # ─────────────────────────────────────────────────────────────────────────────
 
 open_questions:
+  - question: >-
+      ถ้า consumer ต้อง sanitize ชื่อ MCP เอง กฎการแปลงควรอยู่ใน `tool/v1` ไหม —
+      สอง consumer ที่ต่อ server เดียวกันอาจได้ `ToolId` คนละชุด ซึ่งทำลายสมมติฐาน
+      ที่ ADR-0026 พึ่งอยู่
+    asked_at: https://github.com/monthop-gmail/agent-platform/issues/59
+    status: รอ decision
   - question: consumer pin ไฟล์ใน `profiles/` ได้ไหม หรือเป็นแค่ตัวอย่าง
     asked_at: https://github.com/monthop-gmail/agent-platform/issues/47
     status: ยังไม่มีคำตอบ

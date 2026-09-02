@@ -53,6 +53,7 @@ import { compileManifest } from "../builder/compiler.js";
 import { loadPlatformProfile } from "../builder/platform.js";
 import { CANONICAL_SCOPE } from "../builder/platform.js";
 import { listToolNames, getTool } from "../builder/registry/tools.js";
+import { isToolId, toolIdMap } from "../builder/tool-ids.js";
 import { OpenAiCompatibleRuntime } from "../runtimes/openai-compatible/adapter.js";
 import { resetCatalog, setCatalogForTest } from "../builder/registry/models.js";
 import { startOpenAiStub } from "../tests/support/openai-stub.js";
@@ -168,7 +169,11 @@ function asAgentRecord(
     name: manifest.metadata.name,
     instructions: built.agent.systemPrompt,
     ...(manifest.spec.capabilities ? { capability_requirement: manifest.spec.capabilities } : {}),
-    ...(built.agent.tools.length ? { tools: built.agent.tools.map((t) => t.name) } : {}),
+    // #59 option A — internal names stay internal; the record carries wire
+    // ToolIds. Mapped as a SET so a collision cannot hide.
+    ...(built.agent.tools.length
+      ? { tools: [...toolIdMap(built.agent.tools.map((t) => t.name)).values()] }
+      : {}),
     ...(built.agent.mcpServers.length
       ? { mcp_servers: built.agent.mcpServers.map((m) => m.name) }
       : {}),
@@ -263,24 +268,15 @@ async function main(): Promise<void> {
   {
     const fn = validator(ajv, "profile/v1/profile.schema.yaml");
 
-    // Upstream's own profile, vendored verbatim: this is the one that proves
-    // the Builder reads what the contract actually accepts.
-    const real = parseYaml(await readFile(resolve(FIXTURE_DIR, "coding-agent.profile.yaml"), "utf8"));
-    check(fn, real, "coding-agent.profile.yaml is a valid profile/v1 instance");
-    await loadPlatformProfile(resolve(FIXTURE_DIR, "coding-agent.profile.yaml"));
-
-    // Ours is NOT claimed to conform, and cannot: it names this repo's tools
-    // (`current_time`), which are not valid `tool/v1` ToolIds. Same root cause
-    // as the agent/v1 gap below, so it is measured in the same place rather
-    // than quietly skipped.
-    const ourFixture = parseYaml(await readFile(resolve(FIXTURE_DIR, "narrow.profile.yaml"), "utf8"));
-    if (fn(ourFixture)) {
-      failures += 1;
-      out("  ✗ narrow.profile.yaml now validates — the ToolId gap is closed, update known_gaps");
-    } else {
-      out("  · narrow.profile.yaml does not validate (expected — bare tool names)");
+    // One is upstream's own file vendored verbatim, the other is ours. Both
+    // must validate now — ours used to fail because it spoke internal names,
+    // which is the gap #59 was opened about.
+    for (const file of ["coding-agent.profile.yaml", "narrow.profile.yaml"]) {
+      const doc = parseYaml(await readFile(resolve(FIXTURE_DIR, file), "utf8"));
+      check(fn, doc, `${file} is a valid profile/v1 instance`);
+      // ...and the Builder must be able to read what the schema accepts.
+      await loadPlatformProfile(resolve(FIXTURE_DIR, file));
     }
-    await loadPlatformProfile(resolve(FIXTURE_DIR, "narrow.profile.yaml"));
   }
 
   out("\nexecution/v1 — records from runs that really happened");
@@ -337,37 +333,29 @@ async function main(): Promise<void> {
     }
   }
 
-  out("\nagent/v1 — NOT pinned, measured anyway");
+  out("\ntool/v1 — internal name to wire ToolId (#59 option A)");
+  {
+    const names = listToolNames();
+    const ids = toolIdMap(names);   // throws on collision
+    const bad = [...ids.values()].filter((id) => !isToolId(id));
+    if (bad.length) fail("every registry tool maps to a valid ToolId", bad.join(", "));
+    else pass(`every registry tool maps to a valid ToolId (${names.length} tools)`);
+
+    // MCP tools are namespaced `<server>.<tool>` at discovery, which is what
+    // makes them legal — probed against two real servers for #59, 29/29 bare
+    // names, 29/29 valid once namespaced.
+    const mcpish = toolIdMap(["collaboration.post_message", "filesystem.read_file"]);
+    const mcpBad = [...mcpish.values()].filter((id) => !isToolId(id));
+    if (mcpBad.length) fail("MCP-shaped names are valid ToolIds", mcpBad.join(", "));
+    else pass("MCP-shaped names are valid ToolIds");
+  }
+
+  out("\nagent/v1 — records this Builder would hand to the platform");
   {
     const fn = validator(ajv, "agent/v1/agent.schema.yaml");
-    let anyFailed = false;
     for (const file of ["v1alpha2-minimal.yaml", "v1alpha2-policy.yaml", "v1alpha2-tools.yaml"]) {
       const { manifest, built } = await compiled(file);
-      const record = asAgentRecord(manifest, built, ctx);
-      if (!fn(record)) {
-        anyFailed = true;
-        out(
-          `  · ${file} does NOT satisfy agent/v1 — ${(fn.errors ?? [])
-            .map((e) => `${e.instancePath} ${e.message}`)
-            .join(" · ")}`,
-        );
-      } else {
-        out(`  · ${file} satisfies agent/v1`);
-      }
-    }
-    if (anyFailed) {
-      out(
-        "  ⓘ expected — `tool/v1` ToolId requires a dotted name and this registry has\n" +
-          "    bare ones (`calculator`, `current_time`). Renaming them is a breaking\n" +
-          "    change to `agent/v1alpha2`, so `agent/v1` is deliberately NOT pinned.\n" +
-          "    Recorded in platform-contract.yaml under known_gaps.",
-      );
-    } else {
-      failures += 1;
-      out(
-        "  ✗ every record now satisfies agent/v1 — the gap in platform-contract.yaml\n" +
-          "    is stale. Pin `agent/v1` and delete the known_gaps entry.",
-      );
+      check(fn, asAgentRecord(manifest, built, ctx), `${file} as an agent/v1 record`);
     }
   }
 
