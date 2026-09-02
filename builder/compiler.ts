@@ -87,10 +87,13 @@ export function compileManifest(
     deniedCapabilities: effective.denyCapabilities,
   });
 
-  const [model, ...modelFallbacks] = resolveModelChain(manifest.spec.model.preferred) as [
-    ModelBinding,
-    ...ModelBinding[],
-  ];
+  // The capability requirement reaches the Model Registry here — this is the
+  // line that makes `spec.capabilities` mean something to model selection
+  // rather than only to policy.
+  const [model, ...modelFallbacks] = resolveModelChain(
+    manifest.spec.model.preferred,
+    manifest.spec.capabilities,
+  ) as [ModelBinding, ...ModelBinding[]];
 
   const policy = {
     forbidden: effective.denyTools,

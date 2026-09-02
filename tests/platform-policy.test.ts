@@ -1,8 +1,9 @@
-import { describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { resolve } from "node:path";
 import { compileManifest } from "../builder/compiler.js";
 import { validateManifest, type AgentManifest } from "../builder/validator.js";
 import { admitLateTools } from "../builder/registry/policy.js";
+import { resetCatalog, setCatalogForTest } from "../builder/registry/models.js";
 import {
   AGENT_POLICY_FIELD_MAP,
   CANONICAL_SCOPE,
@@ -162,10 +163,30 @@ describe("required ∩ deny = ∅ — reject, do not narrow", () => {
     }
   });
 
-  it("compiles when the agent's needs sit inside the ceiling", async () => {
-    const platform = await narrow();
-    const fine = manifest({ capabilities: { required: ["github"], preferred: ["long_context"] } });
-    expect(() => compileManifest(fine, "sum", { platform })).not.toThrow();
+  describe("with a catalog that declares what its models can do", () => {
+    // The offline seed declares nothing on purpose, so a required capability
+    // cannot be satisfied by it at all. That is the correct default and is
+    // covered in `tests/model-capabilities.test.ts`; here we only need a
+    // catalog that can say yes.
+    beforeAll(() => {
+      setCatalogForTest({
+        deepseek: {
+          id: "deepseek-chat",
+          directBaseUrl: "https://api.deepseek.com/v1",
+          apiKeyEnv: "DEEPSEEK_API_KEY",
+          capabilities: ["tool_calling", "github", "long_context"],
+        },
+      });
+    });
+    afterAll(resetCatalog);
+
+    it("compiles when the agent's needs sit inside the ceiling", async () => {
+      const platform = await narrow();
+      const fine = manifest({
+        capabilities: { required: ["github"], preferred: ["long_context"] },
+      });
+      expect(() => compileManifest(fine, "sum", { platform })).not.toThrow();
+    });
   });
 
   it("rejects a manifest that requires what it forbids itself", () => {
