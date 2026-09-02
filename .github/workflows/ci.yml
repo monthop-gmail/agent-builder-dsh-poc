@@ -12,6 +12,11 @@ on:
 
 jobs:
   test:
+    # Check names are the string branch protection matches on, so they are
+    # written for the person reading a blocked PR, not for the YAML key.
+    # `conformance — ADR-0006` is deliberately the SAME string botforge uses:
+    # one name across the ecosystem means one thing to look for.
+    name: tests — vitest + typecheck
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -24,6 +29,7 @@ jobs:
 
   conformance:
     # ADR-0006: validate real payloads against the pinned schemas, every PR.
+    name: conformance — ADR-0006
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -36,7 +42,9 @@ jobs:
   drift:
     # Kept OUT of the gate on purpose: it needs the network, and a red build
     # caused by GitHub being slow teaches people to stop believing red.
-    # `continue-on-error` makes it a signal, not a blocker.
+    # `continue-on-error` makes it a signal, not a blocker — and the name says
+    # so, because a check nobody can interpret is a check nobody acts on.
+    name: schema drift — advisory, not a gate
     runs-on: ubuntu-latest
     continue-on-error: true
     steps:

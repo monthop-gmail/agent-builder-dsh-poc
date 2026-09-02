@@ -57,6 +57,10 @@ describe("platform-contract.yaml", () => {
   it("has a release gate that runs the conformance check", async () => {
     const ci = await readFile(root(".github/workflows/ci.yml"), "utf8");
     expect(ci).toContain("npm run conformance");
+    // The ruleset matches on this exact string. Renaming the job silently
+    // turns the gate off, because a required check that never reports just
+    // leaves PRs pending — so the name is pinned here too.
+    expect(ci).toContain("name: conformance — ADR-0006");
     // The drift job must stay out of the gate: it needs the network, and a
     // red build caused by a slow network teaches people to ignore red.
     expect(ci).toContain("continue-on-error: true");

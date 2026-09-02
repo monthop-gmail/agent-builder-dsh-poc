@@ -25,10 +25,10 @@ conformance:
   #                       execution record มาจากการรัน openai-compatible runtime กับ
   #                       stub ที่ถูกบังคับให้ตอบ 503 การย้าย provider ที่ถูกบันทึก
   #                       จึงเป็นการย้ายที่เกิดขึ้นจริง ไม่มี fixture ที่เขียนขึ้นเพื่อให้ผ่าน
-  #   3. release gate     job `conformance` ใน .github/workflows/ci.yml รันทุก PR
-  #
-  # ⚠️ ข้อ 3 จะบล็อกการ merge ได้จริงต่อเมื่อเปิด branch protection แล้วตั้ง check
-  #    เป็น required — เป็น repo setting ไม่ใช่สิ่งที่ไฟล์นี้ยืนยันได้
+  #   3. release gate     ruleset `release gate — main` · required checks
+  #                       `tests — vitest + typecheck` และ `conformance — ADR-0006`
+  #                       · bypass_actors: 0 · ห้าม force push · ต้องผ่าน PR
+  #                       (รูปแบบเดียวกับ botforge ไม่ใช่ legacy branch protection)
 
 pinned_contracts_commit: 5bb4a390887cf406f5e46aa051c31e5a7fe7c608   # conformance/pinned.yaml
 
