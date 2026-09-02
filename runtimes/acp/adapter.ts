@@ -174,8 +174,11 @@ export class AcpRuntime implements AgentRuntime {
         toolCalls: state.toolCalls,
       };
     } catch (error) {
-      record("error", { message: (error as Error).message });
-      throw new RunAborted(`acp: ${(error as Error).message}`, {
+      // The client already prefixes its own errors, so only messages from
+      // elsewhere need one.
+      const message = (error as Error).message;
+      record("error", { message });
+      throw new RunAborted(message.startsWith("acp:") ? message : `acp: ${message}`, {
         output: state.output.trim(),
         sessionId: handle.sessionId,
         trace: state.trace,

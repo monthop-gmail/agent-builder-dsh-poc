@@ -185,6 +185,26 @@ describe("AcpRuntime", () => {
     expect(childEnv()).toBe(process.env);
   });
 
+  it("reports a hung agent as unanswered, with whatever it said on stderr", async () => {
+    // Measured against Gemini CLI: when the working directory is not trusted
+    // it explains itself on stderr and simply never answers session/prompt.
+    // From the client that is indistinguishable from a slow model, so the
+    // tail goes in the message.
+    process.env.ACP_STUB_FAIL = "session/prompt-hang";
+    process.env.ACP_REQUEST_TIMEOUT_MS = "1500";
+    const agent = await compiled("researcher.yaml");
+    const runtime = new AcpRuntime();
+    const handle = await runtime.createAgent(agent);
+    try {
+      await expect(runtime.run(handle, "hi", ctx("deny"))).rejects.toThrow(
+        /timed out after 1500ms — the agent never answered/,
+      );
+    } finally {
+      delete process.env.ACP_REQUEST_TIMEOUT_MS;
+      await handle.dispose();
+    }
+  });
+
   it("says which variable names the agent when it is not configured", async () => {
     const saved = process.env.ACP_AGENT_COMMAND;
     delete process.env.ACP_AGENT_COMMAND;

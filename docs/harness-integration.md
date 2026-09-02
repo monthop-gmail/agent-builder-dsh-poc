@@ -25,7 +25,7 @@ DeepSeek   Gemini   Claude   agent อื่น    (ตัวที่ยัง�
 | **opencode** | `acp` | `opencode acp` | 🟢 **รันจบวง** — prompt · **resume ข้าม process** |
 | **Pi** | `pi` (library) | — | 🟢 รันจบวง |
 | **Claude Code** | `acp` | `claude-code-acp` ([`@zed-industries/claude-code-acp`](https://www.npmjs.com/package/@zed-industries/claude-code-acp)) | 🟡 initialize · session/new · session/update ผ่าน · `session/prompt` ต้องใช้ credential ของ Anthropic ซึ่งไม่มี |
-| **Gemini CLI** | `acp` | `gemini --acp` | 🟡 initialize + session/new ผ่านใน 4 วินาที · **`session/prompt` ไม่ตอบเลย** ทั้งที่ API key ใช้ได้จริง — ดูข้างล่าง |
+| **Gemini CLI** | `acp` | `gemini --acp` + `GEMINI_CLI_TRUST_WORKSPACE=true` | 🟢 **รันจบวง** — ต้องตั้ง workspace trust ก่อน ไม่งั้นค้างเงียบ ดูข้างล่าง |
 | **Kimi Code CLI** | `acp` | `kimi acp` | ⚪ อ่านจาก [`docs/en/reference/kimi-acp.md`](https://github.com/MoonshotAI/kimi-code/blob/main/docs/en/reference/kimi-acp.md) — ประกาศว่า implement core 3/3 · session 11/11 |
 | **OpenAI Codex** | ยังไม่มีทางตรง | — | ⚪ ไม่พูด ACP · DSH ห่อมันเป็น subagent (`dsh-subagent-codex`) |
 | **Qwen Code** | ⚠️ **ยังไม่ได้** | `qwen serve` = ACP บน **HTTP+SSE** | ⚪ client ของเรารองรับแค่ **stdio** |
@@ -285,32 +285,94 @@ installer เขียน `export PATH=...` ต่อท้าย **`~/.bashrc` 
 | DeepSeek Harness | ✅ | ✅ | ✅ + resume |
 | opencode | ✅ | ✅ | ✅ + resume |
 | Claude Code | ✅ | ✅ | ✗ ไม่มี credential ของ Anthropic — **สาเหตุชัด** |
-| Gemini CLI | ✅ 4.0s | ✅ 4.1s | ✗ **สาเหตุยังไม่ทราบ** |
+| Gemini CLI | ✅ 3.8s | ✅ 3.9s | ✅ 58.1s (ต้องตั้ง workspace trust ก่อน) |
 
 **4/4 ผ่าน handshake** — ซึ่งเป็นจุดที่ interop พังจริงในทางปฏิบัติ request shape ของเรา
 ถูกต้องกับ implementation ทุกเจ้าที่ทดสอบ
 
-**2/4 เท่านั้นที่ prompt จบ** — และเคสของ Gemini ไม่ใช่เรื่อง credential
+**3/4 prompt จบ** — เหลือ Claude Code ที่ติดเรื่อง credential อย่างเดียว
 
-### Gemini CLI: สิ่งที่สังเกตได้ ไม่ใช่ข้อสรุป
+ที่น่าสนใจคือ **ทั้งสามเคสที่เคยดูเหมือน interop พัง ไม่มีอันไหนเป็นเรื่อง ACP เลย** —
+เป็นเงื่อนไขก่อนเริ่มงานของ agent แต่ละตัวทั้งหมด
+
+### Gemini CLI: ค้างเพราะ workspace trust ไม่ใช่เพราะ ACP
+
+รอบแรกดูเหมือน interop พัง — handshake ผ่านใน 4 วินาที แล้ว `session/prompt` เงียบ 150 วินาที
+ไม่มี stderr ไม่มี error response ไม่มี notification เลย
+
+ตัดสาเหตุผิดไปสามข้อ (API key · client capabilities · auth type) กว่าจะเจอว่าของจริงคือ:
 
 ```
-4.0s initialize OK
-4.1s session/new OK
-      (ไม่มี stderr · ไม่มี request กลับมาหา client · ไม่มี session/update)
-150s TIMEOUT
+$ gemini -p "Reply with exactly: GEM-OK"          # headless ธรรมดา ไม่ใช่ ACP
+Gemini CLI is not running in a trusted directory. To proceed, either use
+`--skip-trust`, set the `GEMINI_CLI_TRUST_WORKSPACE=true` environment variable,
+or trust this directory in interactive mode.
 ```
 
-ตัดออกไปแล้ว:
+ตั้ง env แล้วทั้งสองโหมดทำงานทันที:
 
-- **API key ใช้ได้** — `gemini-2.5-flash:generateContent` ตอบ HTTP 200 ด้วย key เดียวกัน
-- **ไม่ใช่ client capabilities** — ลองทั้ง `fs`/`terminal` เป็น `false` และ `true` ผลเท่ากัน
-- **ไม่ใช่ auth type ที่ยังไม่ได้เลือก** — ตั้ง `selectedAuthType: gemini-api-key` ใน settings แล้ว
+```
+$ GEMINI_CLI_TRUST_WORKSPACE=true gemini --acp
+3.8s  initialize OK
+3.9s  session/new OK
+57.9s update: agent_thought_chunk
+58.1s update: agent_message_chunk  "KEY-OK"
+58.1s session/prompt: {"stopReason":"end_turn",
+        "_meta":{"quota":{"model_usage":[{"model":"gemini-3.5-flash",…}]}}}
+```
 
-ยังไม่ได้ตัด: เวอร์ชันของ `@agentclientprotocol/sdk` ที่ทั้งสองฝั่งใช้ · การต่อรอง
-`protocolVersion` · หรือ gemini-cli อาจรอ client method ที่ spec ไม่ได้บังคับ
+**ความต่างที่ทำให้หายาก:**
 
-**บันทึกไว้เท่าที่สังเกตได้ ไม่ใส่สาเหตุที่ยังไม่ได้พิสูจน์**
+| โหมด | เมื่อ directory ไม่ trusted |
+|---|---|
+| `gemini -p` | พิมพ์ error ออก stderr บอกวิธีแก้ครบ |
+| `gemini --acp` | **เงียบสนิท** — ไม่ตอบ `session/prompt` และไม่บอกอะไรเลย |
+
+**agent ที่ implement ACP ถูกต้อง ยังทำให้ client ค้างได้** ถ้ามันมีเงื่อนไขก่อนเริ่มงาน
+แล้วไม่รายงานผ่านช่องทางของ protocol — spec ไม่ได้บังคับว่า precondition failure
+ต้องกลับมาเป็น error response ของ `session/prompt`
+
+ผ่าน CLI ของเราจริง:
+
+```
+$ run tests/conformance/vectors/minimal.yaml --target acp \
+      --input "ตอบสั้น ๆ ว่าคุณคือ agent อะไร"
+  ผมคือ Gemini CLI ซึ่งเป็นอินเตอร์แอคทีฟเอเยนต์ที่เชี่ยวชาญด้านวิศวกรรมซอฟต์แวร์ ...
+  (target: acp · session: bda6a285-1f7a-41c8-b06e-6951002a4075)
+```
+
+### บั๊กของเราสองตัวที่เจอเพราะรันผ่าน CLI ไม่ใช่ probe
+
+รอบแรกผ่าน CLI ล้มด้วย `acp: acp: 'session/prompt' timed out after 120000ms`
+
+1. **default timeout แคบเกินไป** — ตั้งไว้ 120 วินาทีโดยไม่มีข้อมูลรองรับ ตอนนี้มีแล้ว:
+   Gemini ใช้ 58 วินาทีตอบ prompt บรรทัดเดียว และ Antigravity เอง default
+   `--print-timeout` ไว้ที่ **5 นาที** → เปลี่ยนเป็น 300 วินาที override ด้วย
+   `ACP_REQUEST_TIMEOUT_MS` — **agent coding turn แรกไม่ใช่ chat completion**
+2. **prefix `acp:` ซ้ำสองครั้ง** — adapter เติมทับของ client
+
+และเพิ่มสิ่งที่ควรมีตั้งแต่แรก: ตอน timeout ให้แนบ **stderr ของ agent** มาด้วย
+
+```
+acp: 'session/prompt' timed out after 300000ms — the agent never answered.
+  its stderr said:
+    Gemini CLI is not running in a trusted directory. To proceed, either use ...
+```
+
+ถ้า agent ไม่พิมพ์อะไรเลย ข้อความจะบอกให้ไปดูเงื่อนไขก่อนเริ่มงานแทน —
+เพราะ **"agent ไม่ตอบ" กับ "โมเดลคิดช้า" หน้าตาเหมือนกันเป๊ะจากฝั่ง client**
+ซึ่งเป็นเหตุผลที่หาสาเหตุของ Gemini ไม่เจอตั้งนาน
+
+### เงื่อนไขก่อนเริ่มงานของแต่ละ agent
+
+รวบไว้เพราะเป็นสิ่งที่เสียเวลาที่สุดในการต่อ harness ใหม่ และไม่มีอันไหนเกี่ยวกับ ACP เลย
+
+| agent | เงื่อนไข | อาการถ้าไม่ทำ |
+|---|---|---|
+| Gemini CLI | `GEMINI_CLI_TRUST_WORKSPACE=true` | ค้างเงียบใน ACP mode |
+| Claude Code | ต้องไม่มี `CLAUDECODE` ใน env | ปฏิเสธตอน `session/new` |
+| opencode | ต้องรัน postinstall ให้จบ | start ได้ พิมพ์ error แล้วค้าง |
+| DeepSeek Harness | profile `acp` ต้องมีอยู่ + เวอร์ชัน `dsh` กับ `dsh-acp-app` ต้องตรงกัน | boot ไม่ผ่าน |
 
 ### ข้อสรุปที่ใช้ได้จริงจากตรงนี้
 
