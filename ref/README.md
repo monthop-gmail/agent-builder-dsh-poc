@@ -17,3 +17,4 @@
 |---|---|
 | [`2026-09-02-pi-vs-dsh-consolidation-review.md`](2026-09-02-pi-vs-dsh-consolidation-review.md) | รีวิวรอบ 1: ให้ DSH เป็น canonical, freeze contract, ทำ conformance vectors กลาง |
 | [`2026-09-02-review-02-approve-and-contract-freeze.md`](2026-09-02-review-02-approve-and-contract-freeze.md) | รีวิวรอบ 2: 🟢 APPROVE · ให้เข้า P1 Contract Freeze · อย่าเพิ่ง rename repo / multi-agent / ย้ายเข้า agent-platform |
+| [`2026-09-02-review-03-contract-freeze-decisions.md`](2026-09-02-review-03-contract-freeze-decisions.md) | รอบ 3: คำตัดสิน 7 ข้อ — freeze ที่ `v1alpha2` · behavioral compatibility · golden fixtures → ทำตามแล้วใน [`docs/contract-stability.md`](../docs/contract-stability.md) |
