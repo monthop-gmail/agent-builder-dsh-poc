@@ -1,0 +1,51 @@
+# A manifest that asks for one of everything, so a runtime's `unsupported()`
+# has something to say about each capability at once. It is not meant to be
+# run — it exists so `npm run docs:capabilities` can ask every adapter what it
+# would refuse, and get a complete answer in a single call.
+apiVersion: agent/v1alpha2
+kind: Agent
+
+metadata:
+  name: capability-probe
+  version: 0.1.0
+  description: Exercises every capability a manifest can ask for
+
+spec:
+  purpose:
+    primary: probe_runtime_capabilities
+
+  model:
+    preferred:
+      - deepseek
+      - glm            # a second entry, so model.fallback is exercised
+
+  autonomy:
+    level: 2
+
+  system:
+    instructions: |
+      This agent is never run. It is a probe.
+
+  tools:
+    allowed:
+      - current_time
+      - github.read
+      - github.comment
+
+  skills:
+    - research
+
+  mcp:
+    servers:
+      - filesystem
+
+  policy:
+    forbidden:
+      - github.merge
+
+  humanApproval:
+    required:
+      - github.comment
+
+  audit:
+    required: true
