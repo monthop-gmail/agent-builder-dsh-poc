@@ -1,14 +1,28 @@
-import type { McpServerRef, ResolvedTool } from "../builder/types.js";
+import type { CompiledAgent, McpServerRef, ResolvedTool, ToolEffect } from "../builder/types.js";
+import { admitLateTools } from "../builder/registry/policy.js";
 
 /**
- * Shared MCP plumbing. An MCP server's tools become ordinary ResolvedTools so
- * that everything downstream — policy, approval, tracing — treats them
- * exactly like local tools. There is no second code path for MCP.
+ * Shared MCP plumbing — and the ONLY place any adapter obtains MCP tools.
+ *
+ * That matters: an MCP server does not announce its tools until a client
+ * connects, so those tools miss the Builder's policy pass. Routing every
+ * adapter through this function means they get the same pass here instead of
+ * arriving ungoverned. An adapter cannot forget, because it never builds MCP
+ * tools itself.
  */
+
+export interface McpAttachment {
+  connections: McpConnection[];
+  /** Discovered tools that survived policy. Hand these to the model. */
+  tools: ResolvedTool[];
+  /** Discovered tool names that need a human on every call. */
+  approvalRequired: string[];
+  /** Discovered tool names policy withheld. Reported so the CLI can say so. */
+  withheld: string[];
+}
 
 export interface McpConnection {
   ref: McpServerRef;
-  tools: ResolvedTool[];
   close(): Promise<void>;
 }
 
@@ -18,9 +32,26 @@ interface McpToolDescriptor {
   inputSchema: Record<string, unknown>;
 }
 
-export async function connectMcpServers(refs: McpServerRef[]): Promise<McpConnection[]> {
+/**
+ * MCP carries no notion of whether a tool mutates state, so we infer it:
+ * an explicit entry in the server's descriptor wins, then a conservative name
+ * heuristic, then "write". Guessing "read" wrongly would hand a mutating tool
+ * to a read-only agent, so "write" is the default rather than the fallback of
+ * last resort.
+ */
+const READ_PREFIX = /^(get|list|read|search|fetch|find|query|describe|show|view)[_.-]/i;
+
+export function classifyEffect(toolName: string, ref: McpServerRef): ToolEffect {
+  const explicit = ref.toolEffects?.[toolName];
+  if (explicit) return explicit;
+  return READ_PREFIX.test(toolName) ? "read" : "write";
+}
+
+export async function attachMcpServers(compiled: CompiledAgent): Promise<McpAttachment> {
   const connections: McpConnection[] = [];
-  for (const ref of refs) {
+  const discovered: ResolvedTool[] = [];
+
+  for (const ref of compiled.mcpServers) {
     const { Client } = await import("@modelcontextprotocol/sdk/client/index.js");
 
     let transport: unknown;
@@ -43,33 +74,40 @@ export async function connectMcpServers(refs: McpServerRef[]): Promise<McpConnec
     await client.connect(transport as never);
     const listed = (await client.listTools()) as { tools?: McpToolDescriptor[] };
 
-    const tools: ResolvedTool[] = (listed.tools ?? []).map((t) => ({
-      name: `${ref.name}.${t.name}`,
-      description: t.description ?? `Tool '${t.name}' from MCP server '${ref.name}'`,
-      // An MCP server's tools are external code: assume they can write until
-      // the server tells us otherwise. Under-privileging is recoverable;
-      // over-privileging is not.
-      effect: "write",
-      parameters: t.inputSchema,
-      async execute(args) {
-        const result = (await client.callTool({ name: t.name, arguments: args })) as {
-          content?: { type: string; text?: string }[];
-        };
-        const text = (result.content ?? [])
-          .filter((p) => p.type === "text")
-          .map((p) => p.text ?? "")
-          .join("\n");
-        return { text: text || "(empty MCP tool result)" };
-      },
-    }));
+    for (const t of listed.tools ?? []) {
+      discovered.push({
+        // Namespaced so a manifest can forbid one server's tool without
+        // touching another's tool of the same name.
+        name: `${ref.name}.${t.name}`,
+        description: t.description ?? `Tool '${t.name}' from MCP server '${ref.name}'`,
+        effect: classifyEffect(t.name, ref),
+        parameters: t.inputSchema,
+        async execute(args) {
+          const result = (await client.callTool({ name: t.name, arguments: args })) as {
+            content?: { type: string; text?: string }[];
+          };
+          const text = (result.content ?? [])
+            .filter((p) => p.type === "text")
+            .map((p) => p.text ?? "")
+            .join("\n");
+          return { text: text || "(empty MCP tool result)" };
+        },
+      });
+    }
 
     connections.push({
       ref,
-      tools,
       close: async () => {
         await client.close().catch(() => {});
       },
     });
   }
-  return connections;
+
+  const decision = admitLateTools(compiled, discovered);
+  return {
+    connections,
+    tools: decision.granted,
+    approvalRequired: decision.approvalRequired,
+    withheld: decision.forbidden,
+  };
 }

@@ -1,4 +1,4 @@
-import type { AutonomyPolicy, ResolvedTool, ToolEffect } from "../types.js";
+import type { AutonomyPolicy, CompiledAgent, ResolvedTool, ToolEffect } from "../types.js";
 
 /**
  * Policy Registry — autonomy levels and the forbidden-capability filter.
@@ -95,4 +95,25 @@ export function decideCapabilities(input: {
     forbidden: input.allowed.filter((t) => forbidden.has(t.name)).map((t) => t.name),
     approvalRequired,
   };
+}
+
+/**
+ * Apply the same policy to tools that only appear at connect time.
+ *
+ * An MCP server does not announce its tools until a client connects, so they
+ * cannot be filtered during compile. Routing them through this one function —
+ * from `mcp-client.ts`, which is the only place any adapter obtains MCP tools —
+ * keeps "forbidden means unreachable" true for them too, without asking every
+ * adapter author to remember.
+ */
+export function admitLateTools(
+  compiled: Pick<CompiledAgent, "policy" | "autonomy">,
+  discovered: ResolvedTool[],
+): CapabilityDecision {
+  return decideCapabilities({
+    allowed: discovered,
+    forbidden: compiled.policy.forbidden,
+    autonomy: compiled.autonomy,
+    humanApproval: compiled.policy.humanApproval,
+  });
 }

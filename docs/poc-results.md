@@ -5,15 +5,21 @@
 ## อัตโนมัติ
 
 ```
-npx tsc --noEmit          exit 0
-npx vitest run            5 files · 37 passed · 5 skipped
+npm run typecheck         exit 0   (src + tests)
+npx vitest run            6 files · 45 passed · 5 skipped
 
   tests/manifest.test.ts       9 passed
   tests/policy.test.ts         6 passed
   tests/portability.test.ts    5 passed
   tests/dsh-runtime.test.ts    8 passed
+  tests/mcp-policy.test.ts     8 passed
   tests/conformance.test.ts   14 (9 passed · 5 skipped — ต้องมี credential จริง)
 ```
+
+`tsconfig.json` เดิม `exclude: ["tests"]` แปลว่า `tsc` ไม่เคยตรวจไฟล์ test เลย
+และ vitest ใช้ esbuild ซึ่งไม่สนใจ type — ช่องนี้ปิดแล้วด้วย `tsconfig.test.json`
+(ต้อง override `exclude` ด้วย เพราะมัน inherit มาจาก base และชนะ `include`)
+พอเปิดใช้ครั้งแรกมันจับ type error ที่ค้างอยู่ได้ทันทีหนึ่งจุด
 
 `dsh-runtime.test.ts` รัน `DshRuntime` ตัวจริงยิงใส่ OpenAI-compatible server จำลองบน
 127.0.0.1 ไม่มีการ mock ตัว runtime เลย — fetch เดียวกัน, parse `tool_calls` เดียวกัน,
@@ -71,6 +77,21 @@ $ validate bad.yaml
     Remove it and pass `--target <runtime>` instead.
 ```
 
+## บั๊กที่เจอและแก้ในรอบนี้
+
+**MCP tool ไม่ผ่าน policy** — `dsh` adapter เดิมทำ
+`[...compiled.tools, ...connections.flatMap(c => c.tools)]`
+ซึ่งเอา MCP tool ยัดเข้า list ตรง ๆ ไม่ผ่าน `forbidden` filter และไม่เข้า approval gate
+(`approvalRequired` มีแต่ชื่อ tool ในเครื่อง) ขัดกับที่ README เคลมว่าใช้เส้นทางเดียวกัน
+
+แก้โดยย้ายการหยิบ MCP tool ไปไว้ที่ `attachMcpServers()` ใน `runtimes/mcp-client.ts`
+ที่เดียว แล้วให้มันเรียก `admitLateTools()` เสมอ — adapter ไม่ได้สร้าง MCP tool เองอีกต่อไป
+จึงลืมไม่ได้ พิสูจน์ด้วย `mcp-policy.test.ts` ที่ยก MCP server จริง (SDK ฝั่ง server +
+Streamable HTTP) ขึ้นมาบน 127.0.0.1 แล้วยืนยันว่า tool ที่ forbid ไม่ปรากฏใน list ที่ adapter ได้
+
+หมายเหตุ implementation: Streamable HTTP โหมด stateless ต้องสร้าง server + transport
+**ใหม่ต่อ request** ใช้ตัวเดิมซ้ำจะ 500 ตอน `notifications/initialized`
+
 ## opencode zen
 
 `https://opencode.ai/zen/v1` เป็น OpenAI-compatible จึงต่อได้โดยไม่ต้องแก้โค้ด
@@ -92,7 +113,9 @@ catalog ไม่ hardcode model id ของ zen ไว้ (รายการ�
 
 - **DSH กับ model จริงของผู้ให้บริการ** — loop ทดสอบครบแล้วกับ stub server
   เหลือแค่ยืนยันว่า endpoint จริงตอบเหมือนกัน (ต้องมี key + เน็ตที่ไม่ถูกบล็อก)
-- **MCP `collaboration`** — ต้องมี `AI_COLLAB_MCP_TOKEN`
+- **MCP `collaboration` ตัวจริงบน workers.dev** — protocol ทดสอบครบแล้วกับ MCP server จริงบน
+  localhost และ tool surface ที่ใช้ตั้ง `toolEffects` ก็อ่านมาจาก server ตัวจริง
+  เหลือแค่ยิงข้ามเน็ตไปที่ worker (host โดน egress policy บล็อกจาก sandbox นี้เหมือน opencode.ai)
 - **MCP `filesystem`** — ต้องติดตั้ง `@modelcontextprotocol/server-filesystem` เพิ่ม
 - **`github.*` tools** — ต้องมี `GITHUB_TOKEN`
 

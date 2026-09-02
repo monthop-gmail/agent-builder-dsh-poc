@@ -2,7 +2,7 @@
 
 > เขียน Agent เป็น Manifest หนึ่งไฟล์ แล้ว build ลง runtime ไหนก็ได้ — DeepSeek Harness เป็นตัวแรก
 
-**สถานะ: 🟢 PoC ใช้งานได้** — `npm test` ผ่าน 37 test, CLI รันได้จริง
+**สถานะ: 🟢 PoC ใช้งานได้** — `npm test` ผ่าน 45 test, CLI รันได้จริง
 ยังไม่ใช่ production: ไม่มี UI, ไม่มี database, sub-agent ยังไม่ทำ (P5)
 
 ```text
@@ -128,12 +128,21 @@ adapter ที่อ่าน manifest ได้ จะค่อย ๆ งอ�
 tool จาก MCP server ถูกแปลงเป็น `ResolvedTool` ตัวเดียวกับ tool ในเครื่อง
 ทำให้ policy, approval และ trace ใช้เส้นทางเดียวกันหมด ไม่มี code path ที่สอง
 
+จุดที่ยากคือ MCP server ไม่บอกว่ามี tool อะไรจนกว่าจะ connect — ซึ่งเกิด**หลัง** Builder ทำงานเสร็จ
+ถ้าปล่อยให้ adapter เป็นคนหยิบ tool เหล่านั้นเอง policy จะคุมไม่ถึงและไม่มีใครรู้
+ทางแก้: `runtimes/mcp-client.ts` เป็น**ที่เดียว**ที่ adapter ได้ MCP tool มา และมันเรียก
+`admitLateTools()` ให้เสมอ — adapter ลืมไม่ได้ เพราะมันไม่ได้สร้าง MCP tool เอง
+
+MCP ไม่มีสนามบอกว่า tool ไหนเปลี่ยนสถานะ ระบบจึงเดาให้: server descriptor ที่ระบุไว้ชนะก่อน
+ตามด้วย heuristic จากชื่อ (`get_*`, `list_*`, `search_*` → `read`) แล้วค่อย default เป็น `write`
+— เดาเป็น `read` ผิดแปลว่ายก tool ที่เขียนได้ให้ agent อ่านอย่างเดียว ซึ่งแก้ไม่ได้ย้อนหลัง
+
 ---
 
 ## โครงสร้าง
 
 ```text
-manifests/               ตัวอย่าง 3 ตัว — researcher · code-reviewer · coding-agent
+manifests/               4 ตัว — researcher · code-reviewer · coding-agent · workspace-researcher
 schema/                  JSON Schema (generate จาก zod ด้วย npm run schema)
 builder/
   types.ts               CompiledAgent + AgentRuntime — ห้าม import runtime
@@ -148,7 +157,7 @@ runtimes/
   mock/adapter.ts        runtime จริงที่ไม่ต่อเน็ต ใช้ใน CI
   mcp-client.ts          MCP → ResolvedTool
 cli/index.ts             validate · inspect · build · run · targets
-tests/                   manifest · policy · portability · conformance · dsh-runtime
+tests/                   manifest · policy · portability · conformance · dsh-runtime · mcp-policy
 ```
 
 ---
@@ -172,7 +181,7 @@ tests/                   manifest · policy · portability · conformance · dsh
 | 3 | Capability Registry | ✅ | 6 registry: tool · skill · mcp · model · policy · runtime |
 | 4 | Builder / Compiler | ✅ | `CompiledAgent` ไม่มี type ของ vendor |
 | 5 | DSH Runtime | ✅ | `dsh-runtime.test.ts` — agent loop จริงยิงใส่ OpenAI-compatible server บน localhost |
-| 6 | MCP | ✅ | stdio + Streamable HTTP · `collaboration` ต่อ ai-collaboration-mcp |
+| 6 | MCP | ✅ | `mcp-policy.test.ts` — ยิงใส่ MCP server จริงบน localhost · policy คุม MCP tool ได้ |
 | 7 | Sub-agent | ⏳ P5 | schema รับ `spec.subagents` แล้ว ยังไม่ compile |
 | 8 | Issue → PR ⭐ | ⏳ P6 | `code-reviewer.yaml` + `github.*` tools พร้อมแล้ว |
 | ★ | **สลับ runtime โดยไม่แก้ Manifest** | ✅ | `portability.test.ts` — build ทุก target แล้ว assert ว่าเท่ากัน |

@@ -3,10 +3,12 @@
   "version": "0.1.0",
   "description": "Build agents from a runtime-neutral Agent Manifest and run them on the DeepSeek Harness runtime",
   "type": "module",
-  "bin": { "agent-builder": "./bin/agent-builder.js" },
+  "bin": {
+    "agent-builder": "./bin/agent-builder.js"
+  },
   "scripts": {
     "build": "tsc",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.test.json",
     "test": "vitest run",
     "schema": "tsx scripts/emit-schema.ts",
     "cli": "tsx cli/index.ts"

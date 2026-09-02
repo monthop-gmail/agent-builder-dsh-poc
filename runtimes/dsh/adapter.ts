@@ -7,7 +7,7 @@ import type {
   RunContext,
   TraceEvent,
 } from "../../builder/types.js";
-import { connectMcpServers, type McpConnection } from "../mcp-client.js";
+import { attachMcpServers, type McpConnection } from "../mcp-client.js";
 
 /**
  * DshRuntime — the DeepSeek Harness.
@@ -50,6 +50,8 @@ interface DshHandle extends AgentHandle {
   connections: McpConnection[];
   /** wire-safe function name -> real tool */
   tools: Map<string, ResolvedTool>;
+  /** compile-time gated names plus the ones MCP discovery added */
+  approvalRequired: Set<string>;
 }
 
 /**
@@ -69,10 +71,12 @@ export class DshRuntime implements AgentRuntime {
   }
 
   async createAgent(compiled: CompiledAgent): Promise<AgentHandle> {
-    const connections = await connectMcpServers(compiled.mcpServers);
+    // attachMcpServers applies the manifest's policy to whatever the servers
+    // turn out to expose, so `mcp.tools` here is already filtered.
+    const mcp = await attachMcpServers(compiled);
 
     const tools = new Map<string, ResolvedTool>();
-    for (const tool of [...compiled.tools, ...connections.flatMap((c) => c.tools)]) {
+    for (const tool of [...compiled.tools, ...mcp.tools]) {
       tools.set(wireName(tool.name), tool);
     }
 
@@ -80,10 +84,11 @@ export class DshRuntime implements AgentRuntime {
       runtimeId: this.id,
       sessionId: `dsh-${compiled.name}-${Date.now()}`,
       compiled,
-      connections,
+      connections: mcp.connections,
       tools,
+      approvalRequired: new Set([...compiled.approvalRequired, ...mcp.approvalRequired]),
       dispose: async () => {
-        await Promise.allSettled(connections.map((c) => c.close()));
+        await Promise.allSettled(mcp.connections.map((c) => c.close()));
       },
     };
     return handle;
@@ -186,7 +191,7 @@ export class DshRuntime implements AgentRuntime {
 
         record("tool_call", { tool: tool.name, effect: tool.effect, args });
 
-        if (compiled.approvalRequired.includes(tool.name)) {
+        if (handle.approvalRequired.has(tool.name)) {
           const decision = await ctx.requestApproval({
             tool: tool.name,
             effect: tool.effect,

@@ -50,6 +50,10 @@ export function compileManifest(manifest: AgentManifest, manifestChecksum: strin
       mcpServers,
       autonomy,
       approvalRequired: decision.approvalRequired,
+      policy: {
+        forbidden: manifest.spec.policy?.forbidden ?? [],
+        humanApproval: manifest.spec.humanApproval?.required ?? [],
+      },
       audit: manifest.spec.audit?.required ?? false,
       manifestChecksum,
     },

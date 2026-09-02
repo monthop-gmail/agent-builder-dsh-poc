@@ -37,6 +37,13 @@ export interface McpServerRef {
   args?: string[];
   url?: string;
   headers?: Record<string, string>;
+  /**
+   * Per-tool effect, for servers whose surface we know. MCP does not report
+   * whether a tool mutates anything, so anything not listed here falls back
+   * to a name heuristic and then to "write" — under-privileging a tool is
+   * recoverable, over-privileging it is not.
+   */
+  toolEffects?: Record<string, ToolEffect>;
 }
 
 /**
@@ -78,6 +85,12 @@ export interface CompiledAgent {
   autonomy: AutonomyPolicy;
   /** Tool names that always need a human yes, whatever the autonomy level. */
   approvalRequired: string[];
+  /**
+   * The raw policy, carried so that tools discovered AFTER compile time —
+   * MCP servers only report their tools once connected — get filtered by the
+   * same rules instead of slipping in ungoverned.
+   */
+  policy: { forbidden: string[]; humanApproval: string[] };
   audit: boolean;
   /** sha256 of the manifest bytes. Identical across every build target. */
   manifestChecksum: string;

@@ -1,0 +1,61 @@
+# Researcher ที่ทำงานร่วมกับคนอื่นในโต๊ะประชุม แทนที่จะตอบใส่อากาศ
+#
+# ต่อยอดจาก researcher ของ agent-builder-pi-poc แล้วเพิ่ม collaboration MCP:
+# อ่าน discussion → ค้นข้อมูล → เอาผลกลับไปโพสต์ในเธรด
+#
+#   agent-builder run manifests/workspace-researcher.yaml --target dsh \
+#     --input "ในดิสคัสชัน 'ควรใช้ D1 หรือ KV' เขาถกอะไรกันอยู่ ช่วยหาข้อมูลเพิ่มแล้วสรุปให้หน่อย"
+
+apiVersion: agent/v1alpha2
+kind: Agent
+
+metadata:
+  name: workspace-researcher
+  version: 0.1.0
+  description: ค้นข้อมูลให้ประเด็นที่ทีมกำลังถกกันอยู่ แล้วรายงานกลับเข้าเธรด
+
+spec:
+  purpose:
+    primary: research_open_question_and_report_back
+
+  model:
+    preferred:
+      - zen        # opencode zen — ตั้ง OPENCODE_ZEN_MODEL
+      - deepseek
+
+  # level 1 = อ่านเองได้ทั้งหมด แต่ทุกอย่างที่เขียนลงโต๊ะประชุมต้องมีคนกดอนุมัติ
+  # เหมาะกับ agent ที่พูดในที่ที่คนอื่นเห็น
+  autonomy:
+    level: 1
+
+  system:
+    instructions: |
+      ก่อนตอบอะไร ให้ดูสถานะโต๊ะประชุมก่อนว่ามีใครคุยอะไรค้างไว้
+      อ่านเธรดที่เกี่ยวข้องให้จบก่อนค้นข้อมูลเพิ่ม จะได้ไม่ตอบซ้ำสิ่งที่มีคนพูดไปแล้ว
+      เวลาโพสต์กลับ ให้บอกด้วยว่าอันไหนมาจากแหล่งอ้างอิง อันไหนเป็นการตีความของเราเอง
+
+  skills:
+    - research
+
+  tools:
+    allowed:
+      - web_search
+      - current_time
+
+  mcp:
+    servers:
+      - collaboration
+
+  policy:
+    forbidden:
+      # ปิดดีลเป็นงานของคน ไม่ใช่ของ agent ที่มาช่วยหาข้อมูล
+      - collaboration.resolve_decision
+
+  humanApproval:
+    required:
+      - collaboration.post_message
+      - collaboration.record_decision
+      - collaboration.create_task
+
+  audit:
+    required: true

@@ -55,6 +55,27 @@ const SERVERS: Record<string, Descriptor> = {
         transport: "http",
         url,
         headers: { Authorization: `Bearer ${token}` },
+        // Taken from the server's live tool list, not guessed. Without this
+        // the name heuristic would still get the get_* tools right, but
+        // resolve_decision would be classed "write" when it actually settles
+        // a governance decision — that one deserves the top tier.
+        toolEffects: {
+          get_workspace_context: "read",
+          get_discussion: "read",
+          get_tasks: "read",
+          get_decisions: "read",
+          get_plans: "read",
+          get_handoffs: "read",
+          create_discussion: "write",
+          post_message: "write",
+          create_task: "write",
+          update_task: "write",
+          record_plan: "write",
+          record_decision: "write",
+          create_handoff: "write",
+          accept_handoff: "write",
+          resolve_decision: "irreversible",
+        },
       };
     },
   },

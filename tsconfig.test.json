@@ -1,0 +1,9 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": { "noEmit": true },
+  // `exclude` is inherited from the base config and beats `include`, so the
+  // base's "tests" exclusion has to be overridden here or this config would
+  // silently check nothing.
+  "exclude": ["node_modules", "dist"],
+  "include": ["builder/**/*.ts", "runtimes/**/*.ts", "cli/**/*.ts", "scripts/**/*.ts", "tests/**/*.ts"]
+}

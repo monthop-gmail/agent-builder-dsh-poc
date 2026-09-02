@@ -153,13 +153,22 @@ export function validateManifest(candidate: unknown): ValidationResult {
   }
 
   // A forbidden name that no tool answers to protects nothing — usually a typo.
+  // MCP tools are the exception: a server only reveals its tools once
+  // connected, so `<server>.<tool>` cannot be checked here and is accepted as
+  // long as the server itself is declared.
+  const declaredServers = new Set(m.spec.mcp?.servers ?? []);
+  const isMcpScoped = (name: string) => {
+    const server = name.split(".")[0];
+    return server !== undefined && declaredServers.has(server);
+  };
+
   for (const name of m.spec.policy?.forbidden ?? []) {
-    if (!hasTool(name)) {
+    if (!hasTool(name) && !isMcpScoped(name)) {
       warnings.push(`policy.forbidden: '${name}' matches no known tool — it protects nothing`);
     }
   }
   for (const name of m.spec.humanApproval?.required ?? []) {
-    if (!hasTool(name)) {
+    if (!hasTool(name) && !isMcpScoped(name)) {
       warnings.push(`humanApproval.required: '${name}' matches no known tool — it gates nothing`);
     }
   }

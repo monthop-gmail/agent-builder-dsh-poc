@@ -76,6 +76,16 @@ spec:
 tool ที่ level ไม่อนุญาต **ยังถูกมอบให้ agent** แต่ทุกครั้งที่เรียกจะกลายเป็น approval request
 ต่างจาก `policy.forbidden` ที่ถูกหักทิ้งไปเลยและ agent ไม่มีทางเรียกได้
 
+## อ้างถึง MCP tool ใน policy
+
+ใช้ชื่อเต็ม `<server>.<tool>` เช่น `collaboration.resolve_decision`
+tool ของ MCP ถูก namespace ด้วยชื่อ server เสมอ จะได้ forbid ของ server หนึ่งโดยไม่โดนอีก server
+ที่บังเอิญมี tool ชื่อเดียวกัน
+
+validator ตรวจชื่อพวกนี้กับ registry ไม่ได้ (server ยังไม่ได้ connect ตอน validate)
+จึงยอมรับถ้า server นั้นถูกประกาศใน `spec.mcp.servers` แล้ว — การกรองจริงเกิดตอน connect
+ผ่าน `admitLateTools()` ด้วยกฎชุดเดียวกัน
+
 ## ตรวจ manifest
 
 ```bash
