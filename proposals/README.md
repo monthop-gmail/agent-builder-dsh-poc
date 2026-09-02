@@ -19,3 +19,13 @@
 |---|---|---|
 | [`agent-platform-issue-a-capability.md`](agent-platform-issue-a-capability.md) | `monthop-gmail/agent-platform` | 📝 รอ review · ยังไม่เปิด |
 | [`agent-platform-issue-b-policy-authority.md`](agent-platform-issue-b-policy-authority.md) | `monthop-gmail/agent-platform` | 📝 รอ review · ยังไม่เปิด |
+
+## ตรวจกับของจริงแล้ว
+
+ร่างทั้งสองใบเขียนใหม่เมื่อ 2026-09-02 หลัง clone `agent-platform` มาอ่านทั้งรีโป —
+21 ADR · 16 contract · 6 profile · `architecture/consumers.md` · issue template
+
+สิ่งที่การอ่านเปลี่ยน: คำถามครึ่งหนึ่งในร่างแรก **มีคำตอบอยู่แล้ว** ในรีโปนั้น
+การถามซ้ำจะทำให้ใบที่ส่งไปดูเหมือนไม่ได้อ่าน และผิดกติกาใน
+`.github/ISSUE_TEMPLATE/config.yml` ที่ระบุว่าเรื่องที่มี ADR อยู่แล้วให้ comment ที่ ADR นั้น
+
