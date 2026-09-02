@@ -36,6 +36,33 @@ fixture ที่ทำหน้าที่เป็นเอกสารไป
 | `audit-on` / `audit-off` | สองด้านของสวิตช์เดียวกัน |
 | `mcp` | MCP server ที่ต้อง connect จริง |
 
+## แต่ละ property วิ่งกับ vector ที่เกี่ยวข้อง ไม่ใช่ cross-product
+
+11 vector × 5 runtime × ทุก assertion = ช้าเกินจะรันทุกครั้ง และส่วนใหญ่ไม่ได้พิสูจน์อะไรเพิ่ม
+`conformance.test.ts` จึงเลือก vector ตาม property ที่กำลังทดสอบ
+
+| property | vector ที่ใช้ | ทำไม |
+|---|---|---|
+| เปิด/ปิด session ได้ | **ทั้ง 11 ตัว** | ถูก ไม่มี prompt ไม่มี traffic — จึงครอบให้หมดได้ |
+| tool ที่ยื่นให้โมเดล | `reader` `proposer` `actor` `forbidden` | vector ที่มี tool จริง |
+| approval gate | `observer` `proposer` `approval` | vector ที่มี `approvalRequired` |
+| audit เปิด/ปิด | `audit-on` `audit-off` | สองด้านของสวิตช์เดียว |
+| gap ที่ประกาศถูกจัดระดับแล้ว | **ทั้ง 11 ตัว** | ชื่อ gap โผล่เฉพาะเมื่อ manifest ขอสิ่งนั้น |
+
+การจับคู่ vector กับ property อยู่ใน [`vectors.ts`](vectors.ts) (`GATED_VECTORS`, `TOOLED_VECTORS`,
+`GATED_TOOL`) ไม่ใช่ในไฟล์ test — "vector นี้ gate อะไร" ควรอยู่ข้าง vector
+
+### ข้อที่แข็งที่สุดคือ tool surface
+
+```ts
+expect(offered.toSorted()).toEqual(agent.tools.map(wireName).toSorted())
+```
+
+**เท่ากันเป๊ะ ไม่ใช่ superset** — เพราะ superset คือประตูที่ tool ที่ถูกห้ามเดินกลับเข้ามาได้
+โดยไม่มีใครเฝ้า ตรวจกับ runtime ที่ยื่น local tool จริงเท่านั้น (`openai-compatible`, `pi`)
+ส่วน `acp` กับ `dsh` ประกาศ `tools.local` ไว้แล้วว่าทำไม่ได้ จึงข้ามไปโดยอ่านจาก `unsupported()`
+ไม่ใช่จากรายชื่อ hardcode
+
 ## vector ก็ถูกทดสอบเหมือนกัน
 
 [`vectors.ts`](vectors.ts) ประกาศไว้ว่าแต่ละ vector ต้อง compile ออกมาเป็นอะไร

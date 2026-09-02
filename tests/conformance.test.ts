@@ -3,8 +3,15 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { getRuntime, listRuntimeIds, OFFLINE_RUNTIMES } from "../builder/registry/runtimes.js";
-import { compileVector, VECTORS } from "./conformance/vectors.js";
+import {
+  compileVector,
+  GATED_TOOL,
+  GATED_VECTORS,
+  TOOLED_VECTORS,
+  VECTORS,
+} from "./conformance/vectors.js";
 import { classifyGaps } from "../builder/registry/capabilities.js";
+import { wireName } from "../builder/tool-names.js";
 import { startOpenAiStub, type OpenAiStub } from "./support/openai-stub.js";
 import type { ApprovalRequest, TraceEvent } from "../builder/types.js";
 
@@ -111,34 +118,66 @@ describe.each(listRuntimeIds())("Runtime conformance — %s", (id) => {
     }
   });
 
-  maybe("never receives a tool that policy forbade", async () => {
-    const agent = await compiled("forbidden");
+  // Lifecycle over the WHOLE vector set. It is the cheap half — no prompt, no
+  // peer traffic — so it can afford to be exhaustive, and "this target cannot
+  // even open a session for that shape of manifest" is worth knowing for all
+  // eleven rather than for the two a sample would reach.
+  maybe.each(VECTORS.map((v) => v.name))("opens and closes a session for vector '%s'", async (name) => {
+    const runtime = await getRuntime(id);
+    const handle = await runtime.createAgent(await compiled(name));
+    expect(handle.runtimeId).toBe(id);
+    await expect(handle.dispose()).resolves.toBeUndefined();
+  });
+
+  maybe.each([...TOOLED_VECTORS])("hands '%s' exactly the tools the Builder granted", async (name) => {
+    const agent = await compiled(name);
     const runtime = await getRuntime(id);
     const handle = await runtime.createAgent(agent);
     try {
-      expect(agent.tools.map((t) => t.name)).not.toContain("github.merge");
+      // What the Builder withheld must not reappear anywhere downstream. The
+      // wire check below only covers targets that carry local tools at all;
+      // this one holds for every target, which is the point of withholding
+      // at the Builder rather than asking each adapter to remember.
+      for (const withheld of agent.policy.forbidden) {
+        expect(agent.tools.map((t) => t.name)).not.toContain(withheld);
+      }
+
+      if (runtime.unsupported(agent).includes("tools.local")) return;
+
+      stub.reset();
+      await runtime.run(handle, "list what you can do", ctx("deny", [], []));
+      const offered = stub.requests[0]?.toolNames;
+      // A target that reaches the model through the stub must offer exactly
+      // the granted set — not a superset, which is how a forbidden tool comes
+      // back through a door nobody was watching.
+      if (offered) {
+        expect(offered.toSorted()).toEqual(agent.tools.map((t) => wireName(t.name)).toSorted());
+      }
     } finally {
       await handle.dispose();
     }
   });
 
-  maybe("asks for approval before a gated tool, and honours a denial", async () => {
-    const agent = await compiled("approval");
+  maybe.each([...GATED_VECTORS])("asks before the gated tool in '%s', and honours a denial", async (name) => {
+    const agent = await compiled(name);
+    const gated = GATED_TOOL[name] as { manifest: string; wire: string; args: Record<string, unknown> };
+    expect(agent.approvalRequired, `vector '${name}' has nothing gated`).toContain(gated.manifest);
+
     // Every adapter only reaches the gate when its peer asks for the tool, so
     // both stand-ins are told to ask before anything is started. The ACP stub
     // reads this at spawn time, which is inside createAgent — hence before.
-    stub.callQueue = [
-      { tool: "github_comment", arguments: { repo: "acme/widgets", number: 1, body: "looks fine" } },
-    ];
-    process.env.ACP_STUB_TOOL = "github.comment";
+    stub.reset();
+    stub.callQueue = [{ tool: gated.wire, arguments: gated.args }];
+    process.env.ACP_STUB_TOOL = gated.manifest;
 
     const runtime = await getRuntime(id);
     const handle = await runtime.createAgent(agent);
     const seen: ApprovalRequest[] = [];
-    const trace: TraceEvent[] = [];
     try {
-      await runtime.run(handle, "review it", ctx("deny", seen, trace));
-      expect(seen.map((r) => r.tool)).toContain("github.comment");
+      const result = await runtime.run(handle, "go ahead", ctx("deny", seen, []));
+      expect(seen.map((r) => r.tool)).toContain(gated.manifest);
+      // A denial is only meaningful if the tool did not run.
+      expect(result.toolCalls).toBe(0);
     } finally {
       await handle.dispose();
     }
@@ -173,9 +212,4 @@ describe.each(listRuntimeIds())("Runtime conformance — %s", (id) => {
     }
   });
 
-  maybe("cleans up without throwing", async () => {
-    const runtime = await getRuntime(id);
-    const handle = await runtime.createAgent(await compiled("minimal"));
-    await expect(handle.dispose()).resolves.toBeUndefined();
-  });
 });
