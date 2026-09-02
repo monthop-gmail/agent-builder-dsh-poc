@@ -51,7 +51,26 @@ manifest ได้จะค่อย ๆ งอกพฤติกรรมเฉ
 | `policy` | `spec.policy` + `spec.humanApproval` ∪ เพดานของ platform | **effective policy** พกไปด้วยเพื่อใช้กับ tool ที่โผล่ทีหลัง |
 | `policySource` | `--profile` | profile ที่ร่วมกำหนด `policy` — **มีเฉพาะเมื่อส่ง `--profile`** · เป็น provenance ยังไม่ใช่ identity |
 | `audit` | `spec.audit.required` | ให้ runtime ส่ง trace event หรือไม่ |
-| `manifestChecksum` | sha256 ของไฟล์ manifest | **มัดผลลัพธ์กลับไปหา manifest ที่แน่นอน** |
+| `manifestChecksum` | sha256 ของไฟล์ manifest | ตอบว่า **มาจาก source เดียวกันไหม** — และแค่นั้น |
+| `buildIdentity` | manifest + โซ่ model ตามลำดับ + effective policy + profile | ตอบว่า **เป็น agent ตัวเดียวกันไหม** |
+
+### สองเลขที่ตอบคนละคำถาม
+
+`manifestChecksum` บอกได้แค่ว่า *manifest* เหมือนกัน — build สองครั้งจาก manifest ใบเดียว
+ยังต่างกันได้ ถ้า input ที่อยู่**นอก** manifest เปลี่ยน (catalog ของ model ขยับ · ส่ง
+`--profile` คนละใบ)
+
+`buildIdentity` ครอบสามอย่างที่ขยับได้โดยที่ manifest ไม่ขยับ:
+
+1. **โซ่ model ทั้งเส้น รวมลำดับ** — สลับ fallback = คนละพฤติกรรมภายใต้ความล้มเหลวเดียวกัน
+2. **profile** ที่ถูกส่งเข้ามาเป็นเพดาน
+3. **effective policy** ที่สองอย่างนั้นให้ผลออกมา
+
+tool / skill / systemPrompt ไม่ได้ hash แยก เพราะ derive จาก manifest + registry ซึ่งเป็น
+โค้ดในรีโปนี้ จึงถูก pin ด้วยตัว build อยู่แล้ว — สิ่งที่ hash คือ input ที่ build ไม่ได้พกไปด้วย
+
+**model ที่ใช้จริงตอนรันไม่อยู่ในนี้** เป็น *สถานะของ execution* ไม่ใช่คุณสมบัติของสิ่งที่ build
+(`agent-platform` ADR-0025) — ถ้า identity ต้องครอบมัน artifact จะไม่มี identity จนกว่าจะถูกใช้
 
 ### สามฟิลด์ที่คนมักเข้าใจผิด
 

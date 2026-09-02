@@ -44,6 +44,9 @@ describe("Portability — one manifest, every target", () => {
       for (const pkg of rest) {
         // the manifest itself was never touched
         expect(pkg.manifestChecksum).toBe(first.manifestChecksum);
+        // ...and neither did the target change WHICH agent this is. The build
+        // target is not an input to identity, which is the whole claim.
+        expect(pkg.buildIdentity).toBe(first.buildIdentity);
         // and it compiled to the same agent
         expect(pkg.agent).toEqual(first.agent);
         expect(pkg.systemPrompt).toBe(first.systemPrompt);

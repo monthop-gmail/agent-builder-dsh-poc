@@ -70,34 +70,60 @@ tool ที่ถูกห้ามไม่เดินทางไปถึง
 `admitLateTools()` จึงกรองด้วย effective policy เดียวกัน ไม่งั้นเพดานจะมีรูเดียวที่
 compile time มองไม่เห็น
 
-## สองเรื่องที่ยังไม่จบ
+## เพดานไม่เคย "ให้"
 
-### 1. identity ยังไม่ครอบ effective policy
+profile เป็นเพดาน ไม่ใช่การอนุญาต — ถ้า manifest ไม่ขอ tool ใดเลย **agent ก็ไม่ได้ tool ใดเลย**
+ไม่ว่า profile จะกว้างแค่ไหน การส่ง `tools.allow` ให้เป็นสิทธิ์เมื่อ manifest เงียบ คือการ
+กลับหัวคำว่าเพดาน และจะทำให้ agent ได้ tool ที่ manifest ไม่เคยเอ่ยถึง
 
-ADR-0022 เตือนไว้ว่า:
+## profile ที่มาจากคนละ namespace → reject
 
-> ⚠️ ถ้า deny-list ถูก compile ลงไปในสิ่งที่ build แล้ว **มันต้องอยู่ใน identity ของสิ่งนั้นด้วย**
+[ADR-0026](https://github.com/monthop-gmail/agent-platform/blob/main/decisions/0026-tool-identity-ceiling-is-namespace-bound.md)
+ข้อ 3 — `tools.allow` ที่ไม่ตรงกับ tool ที่ agent ขอเลยสักตัว **ไม่ได้แปลว่า "ห้ามทุกอย่าง"
+แต่แปลว่าเอา profile ผิด namespace มาใช้** จึงต้อง reject
 
-ตอนนี้ยัง**ไม่ใช่** — `manifestChecksum` คำนวณจาก manifest อย่างเดียว build สองครั้ง
-ด้วยคนละ profile ได้ checksum เท่ากันแต่ได้ agent คนละตัว
+กฎนี้เกิดจากเทสในรีโปนี้ที่บันทึกไว้ว่า `profiles/coding-agent` ของจริงพูด `tool/v1` ToolId
+(`github.pr.merge`) ขณะที่เราพูดชื่อใน registry ตัวเอง (`github.merge`) → tool หายหมด
+แล้ว agent ยัง build ได้ · platform รับไปเปิดเป็น [#53](https://github.com/monthop-gmail/agent-platform/issues/53)
+และชี้ว่าเรามองด้านที่ปลอดภัยกว่า:
 
-เราบันทึก `policySource: { profileId, profileChecksum }` ไว้แล้วเพื่อให้ตามรอยได้
-แต่ **ไม่นับเป็น identity** จนกว่า [`agent-platform#52`](https://github.com/monthop-gmail/agent-platform/issues/52)
-จะตอบว่า identity ควรครอบ *ชุดที่อนุญาต* หรือ *ตัวที่ใช้จริง* — คำตอบนั้นกำหนดว่า
-จะเป็น checksum เดียวหรือสองเลข มีเทสยืนยันช่องว่างนี้อยู่ ไม่ได้ปล่อยผ่านเงียบ ๆ
+> ด้านที่อันตรายกว่าคือ `deny` ที่ไม่ตรงแล้วเงียบ ทำให้ *"profile นี้ห้าม merge"*
+> กลายเป็นความเชื่อที่ไม่จริงโดยไม่มีอะไรบอก
 
-### 2. ศัพท์ของ tool ยังคนละชุด
+**deny เชิงชื่อปกป้องเฉพาะ namespace ที่มันตั้งชื่อ** (ข้อ 4) — ไม่มีอะไรทำให้
+`github.pr.merge` ไปคุ้ม `github.merge` ได้ การ reject จึงเป็นวิธีเดียวที่หยุดคนเข้าใจผิดว่ามันคุ้ม
 
-`profiles/coding-agent` พูด `tool/v1` ToolId (`github.pr.merge` · `fs.file.read`)
-รีโปนี้พูดชื่อใน Tool Registry ของตัวเอง (`github.merge`) — ภายใต้ intersection
-แปลว่าเอา profile จริงมาใช้แล้ว **tool หายหมดทุกตัว**
+แยกให้ชัดสามกรณี:
 
-มีเทสยืนยันพฤติกรรมนี้ตรง ๆ แทนที่จะแก้ fixture ให้ผ่าน เพราะการทำให้เทสเขียว
-โดยไม่ได้แก้ของจริงคือการซ่อนงานที่ยังไม่ได้ทำ
+| profile | ผล |
+|---|---|
+| ไม่มี `tools.allow` | ไม่มีเพดานเชิงชื่อ — เพดานมาจาก capability กับ authority |
+| `tools.allow: []` | ห้ามทุก tool **โดยเจตนา** ทำงานปกติ |
+| `tools.allow` ไม่ตรงสักตัว | **reject** — ใช้ผิด namespace |
 
-น่าสังเกตว่าสิ่งที่**ตรงกัน**คือกฎ ไม่ใช่ชื่อ — profile ของเขา deny การ merge พร้อม
-คอมเมนต์ *"merge เป็นของคน ไม่ใช่ของ agent"* และ manifest ตัวอย่างของเราห้ามการกระทำ
-เดียวกันใต้ชื่ออื่น เราค้นพบแยกกันแล้วได้ข้อสรุปเดียวกัน
+## identity ครอบ effective policy แล้ว
+
+ADR-0022 เตือนว่า deny-list ที่ compile ลงไปในสิ่งที่ build ต้องอยู่ใน identity ของสิ่งนั้น
+และ [ADR-0025](https://github.com/monthop-gmail/agent-platform/blob/main/decisions/0025-provider-switch-and-what-identity-covers.md)
+(ตอบ [#52](https://github.com/monthop-gmail/agent-platform/issues/52)) ตัดสินว่า identity ครอบ
+**ทั้งชุดที่แช่แข็งรวมลำดับ** ไม่ใช่ตัวที่ใช้จริง
+
+`CompiledAgent.buildIdentity` คือเลขนั้น — ครอบ manifest checksum · โซ่ model ทั้งเส้นตามลำดับ ·
+effective policy · และ profile ที่ใช้ (id + checksum ของไฟล์)
+
+`manifestChecksum` **ไม่เปลี่ยนความหมาย** ยังตอบว่า *มาจาก source เดียวกันไหม*
+สองเลขตอบคนละคำถาม ดู [`compiled-agent-contract.md`](compiled-agent-contract.md)
+
+## ที่ยังเหลือ
+
+**ศัพท์ของ tool ยังคนละชุด** — ตอนนี้ไม่เงียบแล้ว (reject) แต่ยังใช้ profile จริงของ platform
+กับ registry ของเราตรง ๆ ไม่ได้ ทางออกตาม ADR-0026 ข้อ 2 คือ **เพดานเชิงคุณสมบัติ** —
+ผูก tool เข้ากับ capability แล้วให้ `deny_capabilities` ทำงานข้าม namespace ได้
+ซึ่งต้องเพิ่ม capability ให้ Tool Registry ก่อน · ยังไม่ได้ทำ
+
+**`capability_requirement` ฝั่ง manifest** — `assertBindingValid()` รับ `requiredCapabilities`
+ของ agent ไว้แล้ว แต่ตอนนี้ส่ง `[]` เสมอ กฎ `required ∩ deny` จึงทำงานจากฝั่ง profile
+ฝ่ายเดียว · ยังไม่ได้ทำ
 
 ### ยังไม่ตอบ: pin `profiles/` ได้ไหม
 

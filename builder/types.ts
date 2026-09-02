@@ -116,8 +116,24 @@ export interface CompiledAgent {
    */
   policySource?: { profileId: string; profileChecksum: string };
   audit: boolean;
-  /** sha256 of the manifest bytes. Identical across every build target. */
+  /**
+   * sha256 of the manifest bytes. Identical across every build target.
+   *
+   * Answers *"same source?"* — and only that. Two builds of one manifest can
+   * still differ, because the model catalog and the platform profile live
+   * outside the manifest. Use `buildIdentity` to ask *"same agent?"*.
+   */
   manifestChecksum: string;
+  /**
+   * sha256 over the manifest checksum, the frozen model chain **in order**,
+   * the effective policy, and the profile that shaped it.
+   *
+   * This is the identity `agent-platform` ADR-0023 rule 3 requires of anything
+   * that freezes a binding, with "binding" meaning the whole chain including
+   * its order (ADR-0025) — swapping two fallbacks is a different agent under
+   * the same failure. Identical across build targets, like `manifestChecksum`.
+   */
+  buildIdentity: string;
 }
 
 /* ---------- execution ---------- */
