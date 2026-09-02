@@ -19,6 +19,11 @@
 [`contract-stability.md`](contract-stability.md) — อะไร freeze แล้ว อะไรนับเป็น breaking
 และบังคับด้วย `tests/compatibility/` กับ `tests/contract-stability.test.ts`
 
+## ต่อกับ agent-platform
+
+[`agent-platform-alignment.md`](agent-platform-alignment.md) — contract ของเราเทียบกับ
+`agent-platform` (L3) · ชนกันตรงไหน · ใครต้องตัดสิน · ทำไมยังไม่ใส่ `platform-contract.yaml`
+
 ## harness ที่ต่อได้
 
 [`harness-integration.md`](harness-integration.md) — harness ตัวไหนเข้าทางไหน
