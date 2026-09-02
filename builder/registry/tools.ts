@@ -17,6 +17,11 @@ function jsonSchema(props: Record<string, unknown>, required: string[] = []) {
 const calculator: ResolvedTool = {
   name: "calculator",
   effect: "read",
+  // Arithmetic on a validated string. NOT `code_execution`: that means running
+  // supplied code on a host, and this refuses anything but digits and
+  // operators. Claiming it would make every ceiling that denies code
+  // execution withhold a calculator.
+  capabilities: [],
   description: "Evaluate a pure arithmetic expression (digits, + - * / % ** and parentheses).",
   parameters: jsonSchema(
     { expression: { type: "string", description: "e.g. (2 + 3) * 7" } },
@@ -38,6 +43,7 @@ const calculator: ResolvedTool = {
 const currentTime: ResolvedTool = {
   name: "current_time",
   effect: "read",
+  capabilities: [],
   description: "Return the current UTC time in ISO 8601 format.",
   parameters: jsonSchema({}),
   async execute() {
@@ -48,6 +54,9 @@ const currentTime: ResolvedTool = {
 const webSearch: ResolvedTool = {
   name: "web_search",
   effect: "read",
+  // Reaches api.duckduckgo.com. A worker denied network egress cannot run
+  // this, whatever its name is.
+  capabilities: ["network_egress"],
   description: "Search the web (DuckDuckGo Instant Answer API) and return a short summary.",
   parameters: jsonSchema({ query: { type: "string", description: "Search query" } }, ["query"]),
   async execute(args) {
@@ -91,6 +100,10 @@ async function gh(path: string, init: RequestInit = {}): Promise<unknown> {
 
 const githubRead: ResolvedTool = {
   name: "github.read",
+  // `github` is tool-scope, `network_egress` is host-scope (ADR-0009 keeps
+  // them apart) — this tool needs both, and a ceiling denying either one is
+  // enough to withhold it.
+  capabilities: ["github", "network_egress"],
   effect: "read",
   description: "Read a GitHub issue or pull request, including its body and comments.",
   parameters: jsonSchema(
@@ -123,6 +136,10 @@ const githubRead: ResolvedTool = {
 
 const githubComment: ResolvedTool = {
   name: "github.comment",
+  // `github` is tool-scope, `network_egress` is host-scope (ADR-0009 keeps
+  // them apart) — this tool needs both, and a ceiling denying either one is
+  // enough to withhold it.
+  capabilities: ["github", "network_egress"],
   effect: "write",
   description: "Post a comment on a GitHub issue or pull request.",
   parameters: jsonSchema(
@@ -146,6 +163,10 @@ const githubComment: ResolvedTool = {
 
 const githubMerge: ResolvedTool = {
   name: "github.merge",
+  // `github` is tool-scope, `network_egress` is host-scope (ADR-0009 keeps
+  // them apart) — this tool needs both, and a ceiling denying either one is
+  // enough to withhold it.
+  capabilities: ["github", "network_egress"],
   effect: "irreversible",
   description: "Merge a pull request.",
   parameters: jsonSchema(

@@ -122,6 +122,13 @@ async function loadAndCompile(
         `      The manifest asked for these; the ceiling never granted them.\n`,
     );
   }
+  if (compiled.droppedByCapability.length) {
+    out(
+      `  ⛔ withheld by denied capability: ${compiled.droppedByCapability
+        .map((d) => `${d.tool} (needs ${d.capability})`)
+        .join(", ")}\n`,
+    );
+  }
   if (compiled.droppedByPolicy.length) {
     out(`  ⛔ withheld by policy.forbidden: ${compiled.droppedByPolicy.join(", ")}\n`);
   }

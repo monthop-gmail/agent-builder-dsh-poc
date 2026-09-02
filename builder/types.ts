@@ -19,6 +19,21 @@ export interface ResolvedTool {
   name: string;
   description: string;
   effect: ToolEffect;
+  /**
+   * `capability/v1` ids this tool needs in order to work at all.
+   *
+   * Separate from `effect`, which says how much damage a call can do. This
+   * says what the tool RUNS ON, and it is what makes a ceiling portable:
+   * a name-based `deny` only ever guards the namespace that wrote it
+   * (`agent-platform` ADR-0026 rule 4), so `github.pr.merge` in a platform
+   * profile can never protect a registry that calls the same act
+   * `github.merge`. A capability can — every registry answers to the same
+   * fourteen words.
+   *
+   * Empty means the tool needs nothing outside the process. That is a claim,
+   * not a default: `tests/tool-capabilities.test.ts` checks every entry.
+   */
+  capabilities: string[];
   /** JSON Schema for the arguments object. */
   parameters: Record<string, unknown>;
   execute(args: Record<string, unknown>): Promise<{ text: string }>;

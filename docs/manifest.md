@@ -109,6 +109,10 @@ guardrail ของ tenant ไม่มีความหมาย (`agent-platf
 ชื่อนอกรายการนั้นได้ warning ไม่ใช่ error เพราะตาม ADR-0009 capability ที่ไม่รู้จักถือว่า
 **ไม่มี** อยู่แล้ว การห้ามมันจึงไม่ได้ห้ามอะไร
 
+`deniedCapabilities` ทำงาน**ข้าม namespace** ต่างจาก `forbidden` ที่ผูกกับชื่อ — tool ทุกตัว
+ประกาศไว้ว่าตัวเองรันอยู่บน capability อะไร การ deny `network_egress` จึงหัก `web_search`
+กับ `github.*` ออกได้โดยไม่ต้องรู้ว่ามันชื่ออะไร รวมถึง tool จาก MCP ที่ยังไม่มีชื่อตอน compile
+
 ส่งเพดานเข้ามาด้วย `--profile <profile.yaml>` แล้วอ่าน [`effective-policy.md`](effective-policy.md)
 ว่าสองฝ่ายรวมกันยังไง
 
