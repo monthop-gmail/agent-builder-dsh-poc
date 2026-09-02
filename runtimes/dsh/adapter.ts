@@ -2,7 +2,7 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { CompiledAgent } from "../../builder/types.js";
-import { AcpRuntime, type AcpLauncher, type AgentLaunch } from "../acp/adapter.js";
+import { AcpRuntime, childEnv, type AcpLauncher, type AgentLaunch } from "../acp/adapter.js";
 import { buildPreset } from "./preset.js";
 
 /**
@@ -78,7 +78,7 @@ class DshLauncher implements AcpLauncher {
       command,
       args: [...prefix, "--profile", profile, "--patch", patchPath],
       env: {
-        ...process.env,
+        ...childEnv(),
         // Set here rather than left to the operator: the sandbox mode is part
         // of what the manifest's autonomy level means, and an environment
         // that disagreed with the patch would be the harder bug to find.

@@ -140,9 +140,16 @@ adapter ที่อ่าน manifest ได้ จะค่อย ๆ งอ�
 ACP_AGENT_COMMAND=dsh ACP_AGENT_ARGS="--profile acp" \
   agent-builder run manifests/researcher.yaml --target acp
 
+# agent ที่ปฏิเสธเพราะตัวแปรที่ติดมากับ environment
+ACP_AGENT_ENV_UNSET=CLAUDECODE ACP_AGENT_COMMAND=claude-code-acp \
+  agent-builder run manifests/researcher.yaml --target acp
+
 # ต่อ session เดิม โดย policy มาจาก manifest วันนี้ ไม่ใช่วันที่ session เริ่ม
 agent-builder run manifests/researcher.yaml --target acp --resume <sessionId>
 ```
+
+harness ตัวไหนเข้าทางไหนได้บ้าง — และแต่ละข้อยืนยันถึงไหน — อยู่ใน
+[`docs/harness-integration.md`](docs/harness-integration.md)
 
 สิ่งที่ได้คือ **`resume()`** ซึ่ง runtime อื่นทำไม่ได้ — session อยู่ฝั่ง agent จึงข้าม process ได้
 
