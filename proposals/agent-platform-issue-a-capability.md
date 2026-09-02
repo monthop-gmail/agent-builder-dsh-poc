@@ -2,7 +2,7 @@
 
 **Template:** `contract-change.yml`
 **Title:** `contract: agent/v1 — binding ของ model เกิดตอน build ได้ไหม หรือต้องเป็น runtime เท่านั้น`
-**สถานะ:** 📝 ร่าง ยังไม่เปิด
+**สถานะ:** ✅ **เปิดแล้ว 2026-09-02** → [`agent-platform#46`](https://github.com/monthop-gmail/agent-platform/issues/46) — รอ decision
 
 > **แก้จากร่างแรก** — ร่างแรกถามว่า "capability หรือ provider" ซึ่ง **[ADR-0009](https://github.com/monthop-gmail/agent-platform/blob/main/decisions/0009-capability-model.md)
 > ตัดสินไปแล้วและ Accepted** ตั้งแต่ 2026-08-17 การถามซ้ำคือขอให้เขารื้อ ADR ที่ปิดแล้ว

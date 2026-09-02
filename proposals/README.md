@@ -15,10 +15,12 @@
 
 เมื่อส่งจริงแล้ว ให้เติมลิงก์ของ issue ไว้ในไฟล์ และย้ายผลการตัดสินไปที่ `docs/`
 
+**ทั้งสองใบเปิดแล้วเมื่อ 2026-09-02** — ไฟล์ในโฟลเดอร์นี้คือสิ่งที่ส่งไปตามตัวอักษร ห้ามแก้ให้ตรงกับคำตอบที่ได้ทีหลัง ให้เขียนผลลง `docs/` แทน
+
 | ร่าง | ปลายทาง | สถานะ |
 |---|---|---|
-| [`agent-platform-issue-a-capability.md`](agent-platform-issue-a-capability.md) | `monthop-gmail/agent-platform` | 📝 รอ review · ยังไม่เปิด |
-| [`agent-platform-issue-b-policy-authority.md`](agent-platform-issue-b-policy-authority.md) | `monthop-gmail/agent-platform` | 📝 รอ review · ยังไม่เปิด |
+| [`agent-platform-issue-a-capability.md`](agent-platform-issue-a-capability.md) | [`agent-platform#46`](https://github.com/monthop-gmail/agent-platform/issues/46) | ✅ เปิดแล้ว · รอ decision |
+| [`agent-platform-issue-b-policy-authority.md`](agent-platform-issue-b-policy-authority.md) | [`agent-platform#47`](https://github.com/monthop-gmail/agent-platform/issues/47) | ✅ เปิดแล้ว · รอ decision |
 
 ## ตรวจกับของจริงแล้ว
 
@@ -29,3 +31,13 @@
 การถามซ้ำจะทำให้ใบที่ส่งไปดูเหมือนไม่ได้อ่าน และผิดกติกาใน
 `.github/ISSUE_TEMPLATE/config.yml` ที่ระบุว่าเรื่องที่มี ADR อยู่แล้วให้ comment ที่ ADR นั้น
 
+
+## หลังเปิดแล้ว
+
+| ใบ | ปลายทาง | คำถามหลัก |
+|---|---|---|
+| A | [`agent-platform#46`](https://github.com/monthop-gmail/agent-platform/issues/46) | `model/v1` บอกว่าเลือก model ตอน runtime เท่านั้น แต่ `CompiledAgent` freeze binding ตอน build — ถูกต้องไหม และผล resolve ต้อง pin/version ไหม |
+| B | [`agent-platform#47`](https://github.com/monthop-gmail/agent-platform/issues/47) | กฎ "สามฝ่ายตกลงตรงกัน" ให้ฝ่าย agent มีแต่ `tools` (ที่แปลว่า *ขอ*) กับ `policy_profile` (แค่ชื่อ) — ขอ field ที่ตัดออกได้อย่างเดียว |
+
+ทั้งสองใบ comment cross-link กันไว้แล้ว เพราะเป็นคำถามเดียวกันคนละหน้า —
+**อะไรที่ freeze ตอน build ได้บ้าง**
