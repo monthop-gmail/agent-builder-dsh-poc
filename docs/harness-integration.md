@@ -192,8 +192,27 @@ Error: authentication timed out.
 ไม่สนใจ `GEMINI_API_KEY` หรือ `GOOGLE_API_KEY` เลย — คนละระบบกับ Gemini API
 `agy models` ก็ตอบว่า *"Please sign in to view available models"*
 
-**ผลคือ target นี้จะรันอัตโนมัติไม่ได้จนกว่าจะมีคน login ด้วยบัญชี Google หนึ่งครั้ง**
-ซึ่งเป็นข้อจำกัดที่ต้องรู้ก่อนตัดสินใจ ไม่ใช่หลังเขียน adapter เสร็จ
+และโหมด interactive ก็เปิดไม่ได้ในสภาพแวดล้อมที่ไม่มี TTY:
+
+```
+$ agy
+CLI error: bubbletea: error opening TTY: could not open /dev/tty
+```
+
+ไม่มี subcommand `login` หรือ `auth` และไม่มี flag ไหนรับ token — ทางเดียวคือ TUI
+
+**ผลคือ target นี้จะรันอัตโนมัติไม่ได้จนกว่าจะมีคน login ด้วยบัญชี Google หนึ่งครั้ง
+บนเครื่องที่มี TTY** ซึ่งเป็นข้อจำกัดที่ต้องรู้ก่อนตัดสินใจ ไม่ใช่หลังเขียน adapter เสร็จ
+
+### ทางที่ยังไม่ได้ลอง สำหรับคนที่มาทำต่อ
+
+ใน binary มี env var ชื่อ **`AGY_ADC_AUTH`** ซึ่งชื่อชี้ไปที่
+[Application Default Credentials](https://cloud.google.com/docs/authentication/application-default-credentials)
+ของ Google — ถ้าใช่ ก็แปลว่า **service account หรือ `gcloud auth application-default login`
+น่าจะ auth ได้แบบไม่ต้องมี TTY** ยังไม่ได้ทดสอบเพราะเครื่องนี้ไม่มี GCP credential
+(Gemini API key ไม่ใช่ ADC — คนละอย่าง)
+
+credential ที่ login แล้วถูกเก็บใน `~/.antigravitycli/`
 
 ตัดสินใจได้สองทาง:
 
