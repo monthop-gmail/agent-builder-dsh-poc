@@ -48,7 +48,8 @@ manifest ได้จะค่อย ๆ งอกพฤติกรรมเฉ
 | `mcpServers` | MCP Registry | descriptor สำหรับต่อ ไม่ใช่ tool — tool มาตอน connect |
 | `autonomy` | `spec.autonomy.level` | effect ไหนที่ agent ทำเองได้โดยไม่ต้องถาม |
 | `approvalRequired` | policy + autonomy | ชื่อ tool ที่ต้องมีคนกดอนุมัติทุกครั้ง |
-| `policy` | `spec.policy` + `spec.humanApproval` | **กฎดิบ** พกไปด้วยเพื่อใช้กับ tool ที่โผล่ทีหลัง |
+| `policy` | `spec.policy` + `spec.humanApproval` ∪ เพดานของ platform | **effective policy** พกไปด้วยเพื่อใช้กับ tool ที่โผล่ทีหลัง |
+| `policySource` | `--profile` | profile ที่ร่วมกำหนด `policy` — **มีเฉพาะเมื่อส่ง `--profile`** · เป็น provenance ยังไม่ใช่ identity |
 | `audit` | `spec.audit.required` | ให้ runtime ส่ง trace event หรือไม่ |
 | `manifestChecksum` | sha256 ของไฟล์ manifest | **มัดผลลัพธ์กลับไปหา manifest ที่แน่นอน** |
 
@@ -70,6 +71,10 @@ adapter จึงไม่มี tool ที่ถูกห้ามให้เ
 เพราะ MCP server ไม่บอกว่ามี tool อะไรจนกว่าจะ connect ซึ่งเกิด**หลัง** Builder ทำงานเสร็จ
 tool ชุดนั้นจึงต้องถูกกรองด้วยกฎเดียวกันตอน connect — ผ่าน `admitLateTools()` ใน
 [`runtimes/mcp-client.ts`](../runtimes/mcp-client.ts) ที่เป็นทางเดียวที่ adapter ได้ MCP tool มา
+
+และเป็น **effective policy** ไม่ใช่ครึ่งที่มาจาก manifest — ถ้าพกครึ่งเดียวมา tool ที่เพดาน
+ของ platform ห้ามไว้จะเข้ามาได้ทางประตูเดียวที่ compile time มองไม่เห็น
+ดู [`effective-policy.md`](effective-policy.md)
 
 ## `manifestChecksum` คือ portability invariant
 

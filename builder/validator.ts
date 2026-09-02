@@ -4,6 +4,7 @@ import { hasSkill, listSkillNames } from "./registry/skills.js";
 import { hasMcpServer, listMcpServerNames } from "./registry/mcp.js";
 import { hasModel, listModelNames } from "./registry/models.js";
 import { AUTONOMY_LEVELS, isKnownAutonomyLevel } from "./registry/policy.js";
+import { CAPABILITY_IDS, isKnownCapability } from "./platform.js";
 
 /**
  * Validator — checks a manifest against the agent/v1alpha2 contract and
@@ -62,6 +63,13 @@ const manifestSchema = z.strictObject({
     policy: z
       .strictObject({
         forbidden: z.array(z.string().min(1)),
+        /**
+         * Capabilities this agent refuses for itself — `agent/v1`
+         * `policy.deny_capabilities` (ADR-0022). Deny-only by definition,
+         * like the platform's own block: there is no `allowed` counterpart
+         * and there must never be one, or the ceiling stops meaning anything.
+         */
+        deniedCapabilities: z.array(z.string().min(1)).optional(),
       })
       .optional(),
     humanApproval: z
@@ -167,6 +175,17 @@ export function validateManifest(candidate: unknown): ValidationResult {
       warnings.push(`policy.forbidden: '${name}' matches no known tool — it protects nothing`);
     }
   }
+  // ADR-0009 says a consumer that meets an unknown capability must treat it as
+  // absent. Denying something the taxonomy has never heard of therefore
+  // withholds nothing — the same shape of mistake as a typo'd forbidden tool.
+  for (const name of m.spec.policy?.deniedCapabilities ?? []) {
+    if (!isKnownCapability(name)) {
+      warnings.push(
+        `policy.deniedCapabilities: '${name}' is not in capability/v1 (known: ${CAPABILITY_IDS.join(", ")}) — it denies nothing`,
+      );
+    }
+  }
+
   for (const name of m.spec.humanApproval?.required ?? []) {
     if (!hasTool(name) && !isMcpScoped(name)) {
       warnings.push(`humanApproval.required: '${name}' matches no known tool — it gates nothing`);

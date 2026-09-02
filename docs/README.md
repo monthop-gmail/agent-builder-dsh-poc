@@ -24,6 +24,11 @@
 [`agent-platform-alignment.md`](agent-platform-alignment.md) — contract ของเราเทียบกับ
 `agent-platform` (L3) · ชนกันตรงไหน · ใครต้องตัดสิน · ทำไมยังไม่ใส่ `platform-contract.yaml`
 
+[`effective-policy.md`](effective-policy.md) — กฎสามฝ่าย (profile · agent · tenant)
+ที่ ADR-0022 บอกว่า **พิสูจน์ได้จากเทสของ consumer เท่านั้น** · แมป field ของเราเข้ากับ
+`agent/v1` v1.1.0 · และสองเรื่องที่ยังไม่จบ (identity ยังไม่ครอบ effective policy ·
+ศัพท์ของ tool ยังคนละชุด)
+
 ## harness ที่ต่อได้
 
 [`harness-integration.md`](harness-integration.md) — harness ตัวไหนเข้าทางไหน
@@ -45,6 +50,7 @@
 capability-matrix.md         ← npm run docs:capabilities   · capability-matrix.test.ts
 compiled-agent-contract.md   ← ตารางฟิลด์                   · compiled-agent-contract.test.ts
 contract-stability.md        ← baseline.json                · contract-stability.test.ts
+effective-policy.md          ← AGENT_POLICY_FIELD_MAP       · platform-policy.test.ts
 ```
 
 ที่ทำแบบนี้เพราะ README ของ repo นี้เขียนว่า `npm test ผ่าน 45 test` ค้างมา **9 merge**

@@ -97,7 +97,24 @@ export interface CompiledAgent {
    * MCP servers only report their tools once connected — get filtered by the
    * same rules instead of slipping in ungoverned.
    */
-  policy: { forbidden: string[]; humanApproval: string[] };
+  policy: {
+    /** EFFECTIVE deny list — the agent's own union the platform ceiling's. */
+    forbidden: string[];
+    humanApproval: string[];
+    /** `agent/v1` `policy.deny_capabilities`, likewise already unioned. */
+    deniedCapabilities: string[];
+  };
+  /**
+   * Which platform profile shaped `policy`, when one was supplied.
+   *
+   * ⚠️ Recorded but NOT part of `manifestChecksum`. ADR-0022 warns that a
+   * deny-list compiled into a build artifact belongs inside that artifact's
+   * identity, and ADR-0023 says the same about a frozen model binding — both
+   * wait on the answer to `agent-platform#52`. Until then this field is
+   * provenance, not identity, and `docs/effective-policy.md` says so where a
+   * reader will see it.
+   */
+  policySource?: { profileId: string; profileChecksum: string };
   audit: boolean;
   /** sha256 of the manifest bytes. Identical across every build target. */
   manifestChecksum: string;

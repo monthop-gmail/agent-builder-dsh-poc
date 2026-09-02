@@ -46,6 +46,7 @@ spec:
 
   policy:
     forbidden: [github.merge]      # ไม่บังคับ · Builder หักออกก่อนถึง runtime
+    deniedCapabilities: [shell]    # ไม่บังคับ · capability/v1 id — ตัดออกได้อย่างเดียว
 
   humanApproval:
     required: [github.comment]     # ไม่บังคับ · ต้องมีคนกดอนุมัติทุกครั้ง
@@ -78,6 +79,20 @@ spec:
 
 tool ที่ level ไม่อนุญาต **ยังถูกมอบให้ agent** แต่ทุกครั้งที่เรียกจะกลายเป็น approval request
 ต่างจาก `policy.forbidden` ที่ถูกหักทิ้งไปเลยและ agent ไม่มีทางเรียกได้
+
+## policy ของ agent ตัดออกได้อย่างเดียว
+
+ทั้ง `policy.forbidden` และ `policy.deniedCapabilities` **เพิ่มข้อจำกัดได้ ผ่อนไม่ได้**
+manifest ไม่มีทางเปิดสิ่งที่เพดานของ platform ปิดไว้ — และจะไม่มีวันมี เพราะนั่นทำให้
+guardrail ของ tenant ไม่มีความหมาย (`agent-platform` ADR-0022 · ฝั่งเขาใส่
+`additionalProperties: false` ไว้กันคนเติม `allow` ทีหลังด้วยซ้ำ)
+
+`deniedCapabilities` ใช้ชื่อจาก `capability/v1` v1.1.0 — 14 ค่า ตามที่ ADR-0024 จัด scope ไว้
+ชื่อนอกรายการนั้นได้ warning ไม่ใช่ error เพราะตาม ADR-0009 capability ที่ไม่รู้จักถือว่า
+**ไม่มี** อยู่แล้ว การห้ามมันจึงไม่ได้ห้ามอะไร
+
+ส่งเพดานเข้ามาด้วย `--profile <profile.yaml>` แล้วอ่าน [`effective-policy.md`](effective-policy.md)
+ว่าสองฝ่ายรวมกันยังไง
 
 ## อ้างถึง MCP tool ใน policy
 
