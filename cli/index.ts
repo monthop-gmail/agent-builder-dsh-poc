@@ -34,6 +34,7 @@ Options:
   --approve <mode>  auto | deny | prompt   (default: prompt on a TTY, else deny)
   --trace           Print audit trace events as they happen
   --audit-log <f>   Append the run and its trace to <f> as JSON Lines
+  --resume <id>     Continue a session the target persisted, under this manifest
   --provider <name> Which catalog entry to query for live model ids (models)
 
 A runtime is a build target, not part of the agent: the same manifest builds
@@ -286,7 +287,13 @@ async function main(): Promise<number> {
     }
 
     const runtime = await getRuntime(effectiveTarget);
-    const handle = await runtime.createAgent(agent);
+    const resumeId = flagString(args, "resume");
+    // Resuming re-applies the manifest rather than trusting whatever policy
+    // the session was started with — the session id carries state, not rules.
+    const handle = resumeId
+      ? await runtime.resume(agent, resumeId)
+      : await runtime.createAgent(agent);
+    if (resumeId) out(`  · resumed session ${resumeId}\n`);
     try {
       const result = await runtime.run(handle, input, {
         requestApproval: approver(mode),
@@ -296,7 +303,10 @@ async function main(): Promise<number> {
         },
       });
       out(`\n--- output ---\n${result.output}\n`);
-      out(`\n(target: ${effectiveTarget} · tool calls: ${result.toolCalls} · trace: ${result.trace.length} events)\n`);
+      const session = result.sessionId ? ` · session: ${result.sessionId}` : "";
+      out(
+        `\n(target: ${effectiveTarget} · tool calls: ${result.toolCalls} · trace: ${result.trace.length} events${session})\n`,
+      );
       return 0;
     } catch (e) {
       err(`\nrun failed: ${(e as Error).message}\n`);

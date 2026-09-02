@@ -17,6 +17,10 @@ const LOADERS: Record<string, () => Promise<AgentRuntime>> = {
     const { DshRuntime } = await import("../../runtimes/dsh/adapter.js");
     return new DshRuntime();
   },
+  acp: async () => {
+    const { AcpRuntime } = await import("../../runtimes/acp/adapter.js");
+    return new AcpRuntime();
+  },
   pi: async () => {
     const { PiRuntime } = await import("../../runtimes/pi/adapter.js");
     return new PiRuntime();
@@ -33,7 +37,7 @@ const LOADERS: Record<string, () => Promise<AgentRuntime>> = {
  * adapter, so CI can give it a local endpoint and still exercise the real
  * harness. A runtime left out of this list is a runtime nobody is testing.
  */
-export const OFFLINE_RUNTIMES = ["dsh", "mock", "pi"];
+export const OFFLINE_RUNTIMES = ["acp", "dsh", "mock", "pi"];
 
 export function listRuntimeIds(): string[] {
   return Object.keys(LOADERS).sort();

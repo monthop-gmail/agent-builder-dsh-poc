@@ -154,5 +154,14 @@ export interface AgentRuntime {
   unsupported(compiled: CompiledAgent): string[];
   createAgent(compiled: CompiledAgent): Promise<AgentHandle>;
   run(agent: AgentHandle, input: string, ctx: RunContext): Promise<AgentResult>;
-  resume(sessionId: string): Promise<AgentHandle>;
+  /**
+   * Re-attach to a session the runtime persisted earlier.
+   *
+   * The CompiledAgent is required, not optional: a session id carries no
+   * policy. Resuming from an id alone would produce a handle whose approval
+   * rules and granted tools came from wherever the runtime happened to store
+   * them, which is precisely the enforcement the Builder exists to own. The
+   * manifest is re-compiled and re-applied on every resume.
+   */
+  resume(compiled: CompiledAgent, sessionId: string): Promise<AgentHandle>;
 }

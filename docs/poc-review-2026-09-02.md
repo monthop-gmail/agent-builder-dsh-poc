@@ -528,13 +528,13 @@ $ run manifests/workspace-researcher.yaml --target pi --approve deny --trace
 
 ### 10.4 ที่ยังไม่ได้ทำ
 
-- **`resume()`** ยัง throw ทั้ง 3 runtime — Pi ใช้ `SessionManager.inMemory()` ทางที่ถูกคือ
-  ทำผ่าน ACP (ข้อ 9.3) ไม่ใช่ต่อ session manager ของ Pi เอง
+- ~~**`resume()`** ยัง throw ทั้ง 3 runtime~~ ✅ ทำแล้วผ่าน ACP ดูข้อ 12
 - **`unsupported()` ยังแค่เตือน ไม่ล้ม build** — ข้อ 6 ยังค้าง ตอนนี้ `pi` รายงาน
   `trace.model_step` แล้ว CLI พิมพ์ ⚠ แล้วรันต่อ ถ้าวันหน้ามี capability ที่เกี่ยวกับความปลอดภัย
   ต้องเปลี่ยนเป็นล้ม build
 - ~~**retry / audit sink**~~ ✅ ทำแล้ว ดูข้อ 11 · **agent identity** (ข้อ 3.3) ยังค้าง
-- **แยก `dsh` เป็น `openai-compatible` / `acp` / `dsh`** (ข้อ 5.6) ยังไม่ทำ — รอบนี้เพิ่ม `pi` อย่างเดียว
+- **แยก `dsh` เป็น `openai-compatible` / `acp` / `dsh`** (ข้อ 5.6) — `acp` มีแล้ว (ข้อ 12)
+  เหลือเปลี่ยนชื่อ `dsh` → `openai-compatible` แล้วปล่อยช่อง `dsh` ให้ preset compiler
 
 
 ---
@@ -597,3 +597,89 @@ EVENT model_call {"step": 0, "model": "nemotron-3-ultra-free"}
   (`mcp.connect`, `trace.model_step`, `model.fallback`) ทั้งหมดเป็น degradation ไม่ใช่เรื่องความปลอดภัย
   แต่กติกาว่าอันไหนล้ม อันไหนเตือน ยังไม่ได้เขียน
 - **แยก `dsh` เป็น `openai-compatible` / `acp` / `dsh`** (ข้อ 5.6)
+
+
+---
+
+## 12. `resume()` ผ่าน ACP — runtime `acp`
+
+ปิดข้อที่ค้างจาก 10.4 · ทำต่อจากข้อ 11
+
+```
+npm test    85 passed (85)      ← เดิม 70
+conformance รัน 4 runtime: acp · dsh · mock · pi   ไม่มี skip
+```
+
+### 12.1 adapter ตัวที่สาม และเส้นแบ่งที่ชัดขึ้น
+
+`runtimes/acp/` ไม่ได้รัน agent แต่เป็น **client** ของ agent ที่พูด Agent Client Protocol
+เขียนตาม spec ตรง ๆ (ndjson JSON-RPC บน stdio) ไม่ผูกกับ SDK ของ vendor ไหน
+ตามเหตุผลในข้อ 9.6 ที่ว่า ACP อยู่แค่ช่อง alpha ของ DSH
+
+| | `dsh` | `pi` | `acp` |
+|---|---|---|---|
+| เจ้าของ loop | เรา | vendor | vendor |
+| **เจ้าของพื้นผิว tool** | เรา | **เรา** | vendor |
+| บังคับ `tools.allowed` | ✅ | ✅ | ❌ |
+| บังคับ `policy.forbidden` | ✅ | ✅ | ❌ |
+| บังคับ `humanApproval` | ✅ | ✅ | ✅ `session/request_permission` |
+| `resume()` | ❌ | ❌ | ✅ |
+
+**เส้นแบ่งจริงคือใครเป็นเจ้าของพื้นผิว tool ไม่ใช่ใครเป็นเจ้าของ loop** — ข้อ 10.2 พิสูจน์ว่า
+`pi` บังคับ policy ได้ทั้งที่ Pi ไม่มี permission system เพราะ adapter เขียน `execute` เอง
+`acp` บังคับไม่ได้เพราะ tool มาจาก agent ปลายทาง adapter ไม่มีอะไรให้ห่อ
+
+สิ่งที่ทำได้คือ **ประกาศ** ผ่าน `unsupported()`:
+
+```
+$ inspect manifests/code-reviewer.yaml --target acp
+  ⚠ target 'acp' does not support: tools.local, policy.forbidden
+```
+
+`tools.local` — ACP ไม่มีช่องให้ client ยื่น tool ของตัวเอง มีแต่ MCP
+`policy.forbidden` — `session/new` ยื่น MCP server ทั้งตัว บวก built-in ของ agent เอง (ข้อ 9.4)
+
+### 12.2 `resume()` ต้องรับ CompiledAgent
+
+เปลี่ยน signature ของ `AgentRuntime`:
+
+```ts
+resume(sessionId: string)                            // เดิม
+resume(compiled: CompiledAgent, sessionId: string)   // ใหม่
+```
+
+session id ไม่ได้พก policy มาด้วย ถ้า resume จาก id อย่างเดียว handle ที่ได้จะมี approval rule
+มาจากที่ที่ runtime บังเอิญเก็บไว้ — ซึ่งเป็นสิ่งที่ Builder ตั้งใจเป็นเจ้าของตั้งแต่ต้น
+ตอนนี้ manifest ถูก compile ใหม่และบังคับใหม่ทุกครั้งที่ resume
+
+### 12.3 พิสูจน์กับ DSH ตัวจริง — บริบทข้าม process
+
+รันที่หนึ่ง:
+
+```
+$ run workspace-researcher.yaml --target acp --input "ตอบสั้น ๆ ว่าคุณคือ agent อะไร"
+  ผมคือ AI coding agent ที่ขับเคลื่อนด้วยโมเดล nemotron-3-ultra-free ...
+  (session: 13d77b39-4ce0-4537-a160-875123cae1a6)
+```
+
+process จบ แล้วรันที่สอง — process ใหม่ ไม่มีอะไรร่วมกันนอกจาก session id กับ manifest:
+
+```
+$ run workspace-researcher.yaml --target acp --resume 13d77b39-... \
+      --input "เมื่อกี้ผมถามอะไรไป ตอบสั้น ๆ"
+  · resumed session 13d77b39-4ce0-4537-a160-875123cae1a6
+  คุณถามว่า "คุณคือ agent อะไร" (ตอบสั้น ๆ ห้ามเรียก tool)
+```
+
+agent จำคำถามเดิมได้ **บริบทข้าม process จริง** ซึ่ง `dsh` / `pi` / `mock` ทำไม่ได้เลย
+
+เทสต์ทำแบบเดียวกัน: stub agent เก็บ session ลงไฟล์ เพราะ `resume()` spawn process ใหม่ —
+session ที่อยู่แค่ในหน่วยความจำจะไม่รอด ซึ่งเป็นเหตุผลเดียวกับที่มันจะไม่รอดใน production
+
+### 12.4 ที่ยังค้าง
+
+- **เปลี่ยนชื่อ `dsh` → `openai-compatible`** แล้วให้ `dsh` เป็น preset compiler + acp driver (ข้อ 5.6)
+- **`unsupported()` ยังแค่เตือน ไม่ล้ม build** (ข้อ 6) — ตอนนี้มี 5 ค่าจริงแล้ว
+  (`mcp.connect` · `trace.model_step` · `model.fallback` · `tools.local` · `policy.forbidden`)
+  สองตัวหลังเป็นเรื่องความปลอดภัย ไม่ใช่ degradation — **นี่คือจังหวะที่ต้องเขียนกติกาแล้ว**
+- **agent identity** (ข้อ 3.3) · **sub-agent P5** · **Issue → PR P6**

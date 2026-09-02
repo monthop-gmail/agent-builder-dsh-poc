@@ -1,0 +1,23 @@
+# An agent that brings no local tools and forbids nothing — the shape an
+# out-of-process ACP target can honour completely.
+apiVersion: agent/v1alpha2
+kind: Agent
+
+metadata:
+  name: acp-plain
+  version: 0.1.0
+  description: Talks, and reaches capability only through MCP
+
+spec:
+  purpose:
+    primary: answer_over_acp
+
+  model:
+    preferred:
+      - deepseek
+
+  autonomy:
+    level: 1
+
+  audit:
+    required: false
