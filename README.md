@@ -153,6 +153,19 @@ $ inspect manifests/code-reviewer.yaml --target acp
 
 adapter ที่เงียบเรื่องนี้จะทำให้ manifest **ดูเหมือนถูกบังคับใช้ทั้งที่ไม่ได้** ซึ่งแย่กว่าไม่รองรับเลย
 
+และการประกาศก็มีผลจริง ไม่ใช่แค่ข้อความ:
+
+```
+$ run manifests/code-reviewer.yaml --target acp
+  ⚠ acp: tools.local — granted tools ... cannot cross into this target
+  ⛔ acp: policy.forbidden — the manifest forbids tools this target cannot withhold
+
+refusing to run: target 'acp' cannot honour this manifest.        (exit 1)
+```
+
+**ช่องว่างที่ทำให้ข้อจำกัดหายไป → ปฏิเสธ · ช่องว่างที่ทำให้ความสามารถหายไป → เตือน**
+กติกาและตารางระดับอยู่ใน [`docs/runtime-adapter.md`](docs/runtime-adapter.md)
+
 ### run ที่ล้มเหลว ห้ามโกหกว่าไม่มีอะไรเกิดขึ้น
 
 free tier ตอบ 429/502/503 เป็นเรื่องปกติ — ทดสอบจริงกับ opencode zen เจอ 5 ครั้งใน 8 รอบ
@@ -208,7 +221,7 @@ builder/
   retry.ts               นโยบาย backoff — 429/5xx รอแล้วลองใหม่
   errors.ts              RunAborted — พา side effect ที่ลงไปแล้วติดมากับ error
   audit.ts               audit log แบบ JSON Lines
-  registry/              tools · skills · mcp · models · policy · runtimes
+  registry/              tools · skills · mcp · models · policy · runtimes · capabilities
 runtimes/
   dsh/adapter.ts         loop แบบ OpenAI-compatible ที่เขียนเอง
   pi/adapter.ts          Pi agent harness — Pi เป็นเจ้าของ loop
@@ -217,7 +230,7 @@ runtimes/
   mock/adapter.ts        runtime จริงที่ไม่ต่อเน็ต ใช้ใน CI
   mcp-client.ts          MCP → ResolvedTool
 cli/index.ts             validate · inspect · build · run · targets
-tests/                   manifest · policy · portability · conformance · dsh-runtime · pi-runtime · acp-runtime · mcp-policy · resilience
+tests/                   manifest · policy · portability · conformance · dsh-runtime · pi-runtime · acp-runtime · mcp-policy · resilience · capabilities
   support/acp-stub-agent.mjs  ACP agent จำลอง เก็บ session ลงไฟล์เพื่อทดสอบ resume ข้าม process
   support/openai-stub.ts endpoint ปลอมบน 127.0.0.1 ให้ conformance รันได้ทุก adapter
   fixtures/              manifest ที่มีไว้ทดสอบอย่างเดียว
