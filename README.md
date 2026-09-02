@@ -83,6 +83,7 @@ agent-builder run manifests/researcher.yaml --target openai-compatible --input "
 | `build <manifest> --target <id>` | ออกเป็น `.agentpkg.json` |
 | `run <manifest> --target <id>` | compile แล้วรัน (`--audit-log <f>` เก็บ trace · `--resume <id>` ต่อ session เดิม) |
 | `targets` | รายชื่อ target + ตาราง autonomy level |
+| `npm run docs:capabilities` | สร้าง [`docs/capability-matrix.md`](docs/capability-matrix.md) ใหม่จากโค้ด |
 | `models [--provider <n>]` | catalog ในเครื่อง + ถาม endpoint จริงว่าเสิร์ฟ model อะไร |
 
 ---
@@ -255,6 +256,7 @@ builder/
   errors.ts              RunAborted — พา side effect ที่ลงไปแล้วติดมากับ error
   audit.ts               audit log แบบ JSON Lines
   registry/              tools · skills · mcp · models · policy · runtimes · capabilities
+scripts/                 emit-schema · emit-capability-matrix
 runtimes/
   openai-compatible/     loop ที่เขียนเอง บน endpoint แบบ OpenAI ตัวไหนก็ได้
   dsh/adapter.ts         DeepSeek Harness ตัวจริง — AcpRuntime + preset compiler
@@ -265,7 +267,7 @@ runtimes/
   mock/adapter.ts        runtime จริงที่ไม่ต่อเน็ต ใช้ใน CI
   mcp-client.ts          MCP → ResolvedTool
 cli/index.ts             validate · inspect · build · run · targets
-tests/                   manifest · policy · portability · conformance · openai-compatible-runtime · pi-runtime · dsh-preset · acp-runtime · mcp-policy · resilience · capabilities
+tests/                   manifest · policy · portability · conformance · openai-compatible-runtime · pi-runtime · dsh-preset · acp-runtime · mcp-policy · resilience · capabilities · capability-matrix
   support/acp-stub-agent.mjs  ACP agent จำลอง เก็บ session ลงไฟล์เพื่อทดสอบ resume ข้าม process
   support/openai-stub.ts endpoint ปลอมบน 127.0.0.1 ให้ conformance รันได้ทุก adapter
   fixtures/              manifest ที่มีไว้ทดสอบอย่างเดียว
