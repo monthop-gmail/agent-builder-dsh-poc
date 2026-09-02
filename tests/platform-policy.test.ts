@@ -146,6 +146,70 @@ describe("required ∩ deny = ∅ — reject, do not narrow", () => {
     }
   });
 
+  it("refuses when the AGENT needs what the ceiling denies", async () => {
+    const platform = await narrow();     // denies `shell`
+    const needsShell = manifest({ capabilities: { required: ["shell", "github"] } });
+
+    // Until `spec.capabilities` existed this rule could only fire from the
+    // profile's side, so an agent could declare no needs at all and slip
+    // under any ceiling. Now both parties are in the union ADR-0022 describes.
+    expect(() => compileManifest(needsShell, "sum", { platform })).toThrow(PolicyBindingError);
+
+    try {
+      compileManifest(needsShell, "sum", { platform });
+    } catch (error) {
+      expect((error as PolicyBindingError).conflicts).toEqual(["shell"]);
+    }
+  });
+
+  it("compiles when the agent's needs sit inside the ceiling", async () => {
+    const platform = await narrow();
+    const fine = manifest({ capabilities: { required: ["github"], preferred: ["long_context"] } });
+    expect(() => compileManifest(fine, "sum", { platform })).not.toThrow();
+  });
+
+  it("rejects a manifest that requires what it forbids itself", () => {
+    const result = validateManifest({
+      apiVersion: "agent/v1alpha2",
+      kind: "Agent",
+      metadata: { name: "self-contradicting", version: "0.1.0" },
+      spec: {
+        purpose: { primary: "x" },
+        model: { preferred: ["deepseek"] },
+        autonomy: { level: 1 },
+        tools: { allowed: ["github.read"] },
+        capabilities: { required: ["shell"] },
+        policy: { forbidden: [], deniedCapabilities: ["shell"] },
+      },
+    });
+
+    // No profile involved — the agent contradicts itself, and the message
+    // should say so rather than blaming whatever ceiling it is bound to later.
+    expect(result.ok).toBe(false);
+    expect(result.errors.some((e) => e.includes("cannot require what it forbids itself"))).toBe(true);
+  });
+
+  it("refuses a required capability the taxonomy has never heard of", () => {
+    const result = validateManifest({
+      apiVersion: "agent/v1alpha2",
+      kind: "Agent",
+      metadata: { name: "unknown-need", version: "0.1.0" },
+      spec: {
+        purpose: { primary: "x" },
+        model: { preferred: ["deepseek"] },
+        autonomy: { level: 1 },
+        tools: { allowed: ["github.read"] },
+        capabilities: { required: ["telepathy"] },
+      },
+    });
+
+    // ADR-0009: unknown capability = absent. A requirement nothing can ever
+    // satisfy is an error, unlike a DENIAL of something unknown, which merely
+    // protects nothing and gets a warning.
+    expect(result.ok).toBe(false);
+    expect(result.errors.some((e) => e.includes("counts as absent"))).toBe(true);
+  });
+
   it("compiles when required and denied do not overlap", async () => {
     const platform = await narrow();
     expect(platform.requiredCapabilities).toEqual(["github"]);

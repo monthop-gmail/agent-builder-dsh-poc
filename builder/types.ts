@@ -160,11 +160,56 @@ export interface RunContext {
   onTrace(event: TraceEvent): void;
 }
 
+/**
+ * A category from `agent-platform` `error/v1` `$defs.Category`.
+ *
+ * Only the members a provider switch can be caused by. ADR-0025 chose to
+ * reuse this enum rather than mint a new one, so we borrow the same subset
+ * instead of inventing our own words for the same three facts.
+ */
+export type SwitchReason = "rate_limited" | "timeout" | "provider_error";
+
+/**
+ * One mid-run move to a different provider — the shape of
+ * `execution/v1.provider_switches` (ADR-0025).
+ *
+ * `from` is nullable there because a switch can leave a native runtime that
+ * has no provider id; ours always has one, but the field keeps the shape so
+ * a caller can hand it straight to an execution record.
+ */
+export interface ProviderSwitch {
+  from?: string | null;
+  to: string;
+  at: string;
+  reason?: SwitchReason;
+}
+
 export interface AgentResult {
   output: string;
   sessionId?: string;
   trace: TraceEvent[];
   toolCalls: number;
+  /**
+   * Which provider was in effect when the run ended.
+   *
+   * `execution/v1.provider_id` means *"ตัวที่มีผลล่าสุด ไม่ใช่ตัวเดียวที่เคยใช้"* —
+   * reading it alone after a switch gives an incomplete truth, which is why
+   * `providerSwitches` exists beside it.
+   */
+  providerId?: string;
+  /**
+   * Every provider move that happened, in order.
+   *
+   * **Absent means it never switched.** An empty array is not a valid value —
+   * `execution/v1` sets `minItems: 1` for exactly this reason, so that "did
+   * not happen" and "was not recorded" cannot be written the same way.
+   *
+   * ⚠️ A run that switched cannot have its token usage costed by summing:
+   * the totals mix providers billing at different rates. ADR-0025 wrote that
+   * down as a rule rather than inventing a per-provider usage shape for work
+   * nobody is doing yet.
+   */
+  providerSwitches?: ProviderSwitch[];
 }
 
 export interface AgentHandle {

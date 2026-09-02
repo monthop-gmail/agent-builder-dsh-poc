@@ -121,9 +121,10 @@ effective policy · และ profile ที่ใช้ (id + checksum ขอ�
 ผูก tool เข้ากับ capability แล้วให้ `deny_capabilities` ทำงานข้าม namespace ได้
 ซึ่งต้องเพิ่ม capability ให้ Tool Registry ก่อน · ยังไม่ได้ทำ
 
-**`capability_requirement` ฝั่ง manifest** — `assertBindingValid()` รับ `requiredCapabilities`
-ของ agent ไว้แล้ว แต่ตอนนี้ส่ง `[]` เสมอ กฎ `required ∩ deny` จึงทำงานจากฝั่ง profile
-ฝ่ายเดียว · ยังไม่ได้ทำ
+**`capability_requirement` ฝั่ง manifest** — ✅ ทำแล้ว `spec.capabilities.required`
+เข้าไปอยู่ในกฎ `required ∩ deny` แล้ว ทั้งสองฝ่ายจึงอยู่ใน union จริงตามที่ ADR-0022 เขียน
+· **แต่ยังไม่ได้ใช้เลือก model** — `spec.model.preferred` ยังเป็นตัวตัดสิน
+ดู [`manifest.md`](manifest.md)
 
 ### ยังไม่ตอบ: pin `profiles/` ได้ไหม
 

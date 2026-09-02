@@ -44,6 +44,10 @@ spec:
   mcp:
     servers: [collaboration]       # ไม่บังคับ
 
+  capabilities:                    # ไม่บังคับ · capability/v1 v1.1.0
+    required: [github]             # hard — ถ้าถูก deny ที่ไหนก็ตาม = binding invalid
+    preferred: [long_context]      # soft — ใช้จัดอันดับ ไม่ตัดออก
+
   policy:
     forbidden: [github.merge]      # ไม่บังคับ · Builder หักออกก่อนถึง runtime
     deniedCapabilities: [shell]    # ไม่บังคับ · capability/v1 id — ตัดออกได้อย่างเดียว
@@ -79,6 +83,20 @@ spec:
 
 tool ที่ level ไม่อนุญาต **ยังถูกมอบให้ agent** แต่ทุกครั้งที่เรียกจะกลายเป็น approval request
 ต่างจาก `policy.forbidden` ที่ถูกหักทิ้งไปเลยและ agent ไม่มีทางเรียกได้
+
+## `capabilities` ประกาศความต้องการ ยังไม่ได้เลือก model
+
+`spec.capabilities.required` คือสิ่งที่ agent **ต้องมี** ตามศัพท์ของ `capability/v1`
+ถ้าอะไรในนี้ถูก deny โดยฝ่ายใดก็ตาม (ตัวเอง หรือ profile) **binding นั้น invalid → reject**
+ไม่ใช่ลดขอบเขตให้เงียบ ๆ (`agent-platform` ADR-0022)
+
+ชื่อที่ไม่อยู่ใน taxonomy เป็น **error** ไม่ใช่ warning เพราะ ADR-0009 บอกว่า capability
+ที่ไม่รู้จักถือว่า **ไม่มี** — ความต้องการที่ไม่มีอะไรสนองได้เลยจึงไม่ควรผ่าน
+(ต่างจาก `deniedCapabilities` ที่ชื่อแปลกแค่ไม่ได้ห้ามอะไร จึงเป็น warning)
+
+⚠️ **ยังไม่ได้ใช้เลือก model** — `spec.model.preferred` ยังเป็นตัวตัดสินอยู่
+การประกาศความต้องการกับการ resolve จากความต้องการเป็นคนละงาน และงานที่สองยังไม่ได้ทำ
+เขียนไว้ตรงนี้เพราะ field ที่ดูเหมือนทำงานแต่ไม่ทำ คือสิ่งที่แย่กว่าไม่มี field
 
 ## policy ของ agent ตัดออกได้อย่างเดียว
 

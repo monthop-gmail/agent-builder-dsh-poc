@@ -102,6 +102,52 @@ describe("retry and fallback", () => {
       expect(
         result.trace.some((e) => e.kind === "retry" && e.detail.to === fallback.requested),
       ).toBe(true);
+
+      // The same fact in the shape `execution/v1.provider_switches` accepts
+      // (agent-platform ADR-0025). The trace says it in prose; a record only
+      // a human can read is not an audit trail anyone can check.
+      expect(result.providerSwitches).toEqual([
+        {
+          from: agent.model.requested,
+          to: fallback.requested,
+          at: expect.any(String),
+          reason: "provider_error", // 503
+        },
+      ]);
+      // "ตัวที่มีผลล่าสุด ไม่ใช่ตัวเดียวที่เคยใช้"
+      expect(result.providerId).toBe(fallback.requested);
+    } finally {
+      await handle.dispose();
+    }
+  });
+
+  it("omits providerSwitches entirely when nothing ever switched", async () => {
+    const agent = await compiled("researcher.yaml");
+    const handle = await runtime().createAgent(agent);
+    try {
+      const result = await runtime().run(handle, "hi", ctx("deny"));
+
+      // `execution/v1` sets `minItems: 1` so that "did not happen" and "was
+      // not recorded" cannot be written the same way. An empty array here
+      // would be an invalid execution record.
+      expect(result.providerSwitches).toBeUndefined();
+      expect(result.providerId).toBe(agent.model.requested);
+    } finally {
+      await handle.dispose();
+    }
+  });
+
+  it("maps a 429 to rate_limited rather than provider_error", async () => {
+    const agent = await compiled("researcher.yaml");
+    const fallback = agent.modelFallbacks[0]!;
+    const handle = await runtime().createAgent(agent);
+    try {
+      // ADR-0025 reuses `error/v1` `Category` instead of minting a new enum,
+      // so the reason has to be the right member of it, not a free string.
+      stub.failModels = { [agent.model.id]: 429 };
+      const result = await runtime().run(handle, "hi", ctx("deny"));
+      expect(result.providerSwitches?.[0]?.reason).toBe("rate_limited");
+      expect(result.providerSwitches?.[0]?.to).toBe(fallback.requested);
     } finally {
       await handle.dispose();
     }

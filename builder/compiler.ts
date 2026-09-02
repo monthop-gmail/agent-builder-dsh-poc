@@ -59,10 +59,7 @@ export function compileManifest(
     denyCapabilities: manifest.spec.policy?.deniedCapabilities ?? [],
     requireHumanFor: manifest.spec.humanApproval?.required ?? [],
     toolsRequested: manifest.spec.tools?.allowed,
-    // Nothing yet: `capability_requirement` on the manifest side is the next
-    // piece of work and waits on nothing but our own hands. The rule below is
-    // already live against whatever the profile requires.
-    requiredCapabilities: [],
+    requiredCapabilities: manifest.spec.capabilities?.required ?? [],
   };
 
   const effective = combinePolicies(agentPolicy, options.platform);
