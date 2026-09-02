@@ -23,9 +23,33 @@ export interface CatalogEntry {
   directBaseUrl: string;
   /** env var holding the provider key, used only when routing direct */
   apiKeyEnv: string;
+  /**
+   * `capability/v1` ids this model declares — the declaration side of
+   * ADR-0009, which keeps "ฉันมี" separate from "ฉันต้องการ".
+   *
+   * **Absent means unknown, and ADR-0009 says a consumer meeting an unknown
+   * capability must treat it as absent.** So an entry that declares nothing
+   * satisfies no requirement. That is why the seed below declares nothing:
+   * this repo has not verified any provider's capabilities by running them,
+   * and a catalog that asserts `tool_calling` because a docs page said so is
+   * the same class of unchecked claim we keep finding and removing.
+   *
+   * The real declarations belong to `free-llm-registry`, which owns the
+   * catalog (`FREE_LLM_REGISTRY_URL`). ADR-0009 is explicit that a provider
+   * file must point at a declaration rather than embed capabilities, so this
+   * field exists to carry what the registry says, not to originate it.
+   */
+  capabilities?: string[];
 }
 
-/** Offline fallback only. free-llm-registry owns the real list. */
+/**
+ * Offline fallback only. free-llm-registry owns the real list.
+ *
+ * No entry declares capabilities — see `CatalogEntry.capabilities`. A manifest
+ * that sets `spec.capabilities.required` therefore cannot build against the
+ * seed, and the error says exactly that instead of quietly binding a model
+ * nobody checked.
+ */
 const SEED: Record<string, CatalogEntry> = {
   deepseek: {
     id: "deepseek-chat",
@@ -87,6 +111,30 @@ export function catalogOrigin(): string {
   return catalogSource;
 }
 
+/** `capability/v1` requirement, as a manifest states it. */
+export interface CapabilityRequirement {
+  required?: string[];
+  preferred?: string[];
+}
+
+/** Raised when the catalog has no model that can do what the agent needs. */
+export class NoCapableModelError extends Error {
+  constructor(
+    readonly required: string[],
+    readonly considered: { name: string; declares: string[] }[],
+  ) {
+    const seen = considered
+      .map((c) => `${c.name} declares [${c.declares.join(", ") || "nothing"}]`)
+      .join("; ");
+    super(
+      `model: no named model declares [${required.join(", ")}] — ${seen || "no candidates"}. ` +
+        `An undeclared capability counts as absent (ADR-0009), so a model that has not said ` +
+        `it can do this is not silently assumed to.`,
+    );
+    this.name = "NoCapableModelError";
+  }
+}
+
 /**
  * Resolve every entry of `preferred` the catalog knows about, in order.
  *
@@ -97,20 +145,71 @@ export function catalogOrigin(): string {
  *
  * Entries the catalog does not know are skipped rather than fatal — the
  * catalog is owned by free-llm-registry and changes without this repo.
+ *
+ * `requirement` filters and ranks what is left, which is the consumer half of
+ * ADR-0009: choosing freely from the whole catalog by capability is the
+ * platform router's job, and this Builder is not the router. What it CAN do —
+ * and now does — is refuse to bind a model that has not said it can do what
+ * the manifest declared it needs.
  */
-export function resolveModelChain(preferred: string[]): ModelBinding[] {
-  const chain = preferred.filter((name) => hasModel(name)).map(bindModel);
-  if (!chain.length) {
+export function resolveModelChain(
+  preferred: string[],
+  requirement?: CapabilityRequirement,
+): ModelBinding[] {
+  const known = preferred.filter((name) => hasModel(name));
+  if (!known.length) {
     throw new Error(
       `model: none of [${preferred.join(", ")}] is in the catalog (known: ${listModelNames().join(", ")})`,
     );
   }
-  return chain;
+
+  const required = requirement?.required ?? [];
+  const declaresOf = (name: string) => (catalog[name] as CatalogEntry).capabilities ?? [];
+
+  // Hard filter. `required` eliminates; it does not rank.
+  const capable = required.length
+    ? known.filter((name) => required.every((c) => declaresOf(name).includes(c)))
+    : known;
+
+  if (!capable.length) {
+    throw new NoCapableModelError(
+      required,
+      known.map((name) => ({ name, declares: declaresOf(name) })),
+    );
+  }
+
+  // Soft ranking. `preferred` in capability/v1 "ใช้จัดอันดับ ไม่ใช่ตัดออก", so
+  // a model missing all of them still runs — it just runs last. Manifest order
+  // breaks ties, which keeps the old behaviour exactly when no capability
+  // preference is stated.
+  const wanted = requirement?.preferred ?? [];
+  const score = (name: string) => wanted.filter((c) => declaresOf(name).includes(c)).length;
+  const ranked = capable
+    .map((name, index) => ({ name, index, score: score(name) }))
+    .sort((a, b) => b.score - a.score || a.index - b.index)
+    .map((c) => c.name);
+
+  return ranked.map(bindModel);
 }
 
 /** The model the agent runs on: the first resolvable entry of `preferred`. */
-export function resolveModel(preferred: string[]): ModelBinding {
-  return resolveModelChain(preferred)[0] as ModelBinding;
+export function resolveModel(
+  preferred: string[],
+  requirement?: CapabilityRequirement,
+): ModelBinding {
+  return resolveModelChain(preferred, requirement)[0] as ModelBinding;
+}
+
+/** Replace the catalog. Tests use it; nothing in the build path calls it. */
+export function setCatalogForTest(entries: Record<string, CatalogEntry>, source = "test"): void {
+  catalog = entries;
+  catalogSource = source;
+}
+
+/** Restore the offline seed. */
+export function resetCatalog(): void {
+  catalog = { ...SEED };
+  catalogSource = "seed (offline fallback)";
 }
 
 function bindModel(requested: string): ModelBinding {

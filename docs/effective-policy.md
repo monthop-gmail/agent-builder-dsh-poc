@@ -143,7 +143,7 @@ capability ข้ามเส้นนั้นได้ เพราะทุ�
 
 **`capability_requirement` ฝั่ง manifest** — ✅ ทำแล้ว `spec.capabilities.required`
 เข้าไปอยู่ในกฎ `required ∩ deny` แล้ว ทั้งสองฝ่ายจึงอยู่ใน union จริงตามที่ ADR-0022 เขียน
-· **แต่ยังไม่ได้ใช้เลือก model** — `spec.model.preferred` ยังเป็นตัวตัดสิน
+· และใช้เลือก model แล้ว — `required` กรอง `model.preferred`, `preferred` จัดอันดับ
 ดู [`manifest.md`](manifest.md)
 
 ### ยังไม่ตอบ: pin `profiles/` ได้ไหม
