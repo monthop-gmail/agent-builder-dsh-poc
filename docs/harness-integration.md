@@ -25,7 +25,7 @@ DeepSeek   Gemini   Claude   agent อื่น    (ตัวที่ยัง�
 | **opencode** | `acp` | `opencode acp` | 🟢 **รันจบวง** — prompt · **resume ข้าม process** |
 | **Pi** | `pi` (library) | — | 🟢 รันจบวง |
 | **Claude Code** | `acp` | `claude-code-acp` ([`@zed-industries/claude-code-acp`](https://www.npmjs.com/package/@zed-industries/claude-code-acp)) | 🟡 initialize · session/new · session/update ผ่าน · `session/prompt` ต้องใช้ credential ของ Anthropic ซึ่งไม่มี |
-| **Gemini CLI** | `acp` | `gemini --acp` | ⚪ อ่านจาก [`docs/cli/acp-mode.md`](https://github.com/google-gemini/gemini-cli/blob/main/docs/cli/acp-mode.md) ของเขา ยังไม่ได้รัน |
+| **Gemini CLI** | `acp` | `gemini --acp` | 🟡 initialize + session/new ผ่านใน 4 วินาที · **`session/prompt` ไม่ตอบเลย** ทั้งที่ API key ใช้ได้จริง — ดูข้างล่าง |
 | **Kimi Code CLI** | `acp` | `kimi acp` | ⚪ อ่านจาก [`docs/en/reference/kimi-acp.md`](https://github.com/MoonshotAI/kimi-code/blob/main/docs/en/reference/kimi-acp.md) — ประกาศว่า implement core 3/3 · session 11/11 |
 | **OpenAI Codex** | ยังไม่มีทางตรง | — | ⚪ ไม่พูด ACP · DSH ห่อมันเป็น subagent (`dsh-subagent-codex`) |
 | **Qwen Code** | ⚠️ **ยังไม่ได้** | `qwen serve` = ACP บน **HTTP+SSE** | ⚪ client ของเรารองรับแค่ **stdio** |
@@ -126,6 +126,11 @@ ACP_AGENT_ENV_UNSET=CLAUDECODE,CLAUDE_CODE_ENTRYPOINT
 
 ## Antigravity CLI — ตัวแรกที่ต้องเขียน adapter จริง
 
+> **หมายเหตุเรื่อง credential:** Gemini API key (`generativelanguage.googleapis.com`)
+> **ใช้กับ Antigravity CLI ไม่ได้** — คนละระบบ Antigravity auth เข้าบัญชี Google
+> ผ่าน installer ของตัวเอง ส่วน Gemini API key ใช้กับ Gemini CLI และกับ Gemini
+> ในฐานะ model provider
+
 ทุกตัวก่อนหน้านี้เข้าทาง `acp` ได้ด้วยการตั้งค่า [Antigravity CLI](https://antigravity.google/product/antigravity-cli)
 ของ Google **ไม่พูด ACP** แต่มี headless protocol ของตัวเอง
 
@@ -178,6 +183,48 @@ CompiledAgent
 
 1. **ทำ** — ถ้ามี credential แล้วยอมรับว่าจะรองรับได้แค่ manifest ที่ไม่มี policy
 2. **ไม่ทำ** — รอดูว่าเขาจะเพิ่ม ACP ไหม เหมือนที่ Gemini CLI, Kimi, opencode ทำไปแล้ว
+
+## ผล interop จริง 4 เจ้า
+
+ทดสอบด้วย client ตัวเดียวกัน manifest เดียวกัน
+
+| harness | initialize | session/new | session/prompt |
+|---|---|---|---|
+| DeepSeek Harness | ✅ | ✅ | ✅ + resume |
+| opencode | ✅ | ✅ | ✅ + resume |
+| Claude Code | ✅ | ✅ | ✗ ไม่มี credential ของ Anthropic — **สาเหตุชัด** |
+| Gemini CLI | ✅ 4.0s | ✅ 4.1s | ✗ **สาเหตุยังไม่ทราบ** |
+
+**4/4 ผ่าน handshake** — ซึ่งเป็นจุดที่ interop พังจริงในทางปฏิบัติ request shape ของเรา
+ถูกต้องกับ implementation ทุกเจ้าที่ทดสอบ
+
+**2/4 เท่านั้นที่ prompt จบ** — และเคสของ Gemini ไม่ใช่เรื่อง credential
+
+### Gemini CLI: สิ่งที่สังเกตได้ ไม่ใช่ข้อสรุป
+
+```
+4.0s initialize OK
+4.1s session/new OK
+      (ไม่มี stderr · ไม่มี request กลับมาหา client · ไม่มี session/update)
+150s TIMEOUT
+```
+
+ตัดออกไปแล้ว:
+
+- **API key ใช้ได้** — `gemini-2.5-flash:generateContent` ตอบ HTTP 200 ด้วย key เดียวกัน
+- **ไม่ใช่ client capabilities** — ลองทั้ง `fs`/`terminal` เป็น `false` และ `true` ผลเท่ากัน
+- **ไม่ใช่ auth type ที่ยังไม่ได้เลือก** — ตั้ง `selectedAuthType: gemini-api-key` ใน settings แล้ว
+
+ยังไม่ได้ตัด: เวอร์ชันของ `@agentclientprotocol/sdk` ที่ทั้งสองฝั่งใช้ · การต่อรอง
+`protocolVersion` · หรือ gemini-cli อาจรอ client method ที่ spec ไม่ได้บังคับ
+
+**บันทึกไว้เท่าที่สังเกตได้ ไม่ใส่สาเหตุที่ยังไม่ได้พิสูจน์**
+
+### ข้อสรุปที่ใช้ได้จริงจากตรงนี้
+
+ACP ทำให้ **ต่อติด** ได้ทุกเจ้า แต่ไม่ได้แปลว่า **ใช้งานได้จบวง** ทุกเจ้า —
+ซึ่งเป็นเหตุผลที่ตารางนี้แยกคอลัมน์ handshake กับ prompt ออกจากกัน และเป็นเหตุผลที่
+conformance กับ stub ตัวเดียวไม่พอ stub ของเรายอมรับทุกอย่างที่เราส่ง agent จริงไม่ใช่
 
 ## สรุปรูปแบบการเชื่อมทั้งหมดที่เจอ
 
