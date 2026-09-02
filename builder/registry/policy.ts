@@ -66,6 +66,15 @@ export interface CapabilityDecision {
   granted: ResolvedTool[];
   /** Dropped because `policy.forbidden` names them. */
   forbidden: string[];
+  /**
+   * Dropped because a capability they need is denied — `{tool, capability}`.
+   *
+   * Reported apart from `forbidden` because it answers a different question.
+   * "Someone named this tool" and "this tool needs something nobody may use
+   * here" are different facts, and only the second one travels between
+   * namespaces.
+   */
+  deniedByCapability: { tool: string; capability: string }[];
   /** Granted, but each call raises an approval request first. */
   approvalRequired: string[];
 }
@@ -79,9 +88,24 @@ export function decideCapabilities(input: {
   forbidden: string[];
   autonomy: AutonomyPolicy;
   humanApproval: string[];
+  deniedCapabilities?: string[];
 }): CapabilityDecision {
   const forbidden = new Set(input.forbidden);
-  const granted = input.allowed.filter((t) => !forbidden.has(t.name));
+  const deniedCapabilities = new Set(input.deniedCapabilities ?? []);
+
+  // ADR-0026 rule 2: a tool whose required capabilities intersect anyone's
+  // deny list is unusable. This is the half of the ceiling that survives a
+  // rename — the platform never has to know what our registry calls things,
+  // only what they need.
+  const deniedByCapability: { tool: string; capability: string }[] = [];
+  const withinCapabilities = input.allowed.filter((t) => {
+    const blocked = (t.capabilities ?? []).find((c) => deniedCapabilities.has(c));
+    if (blocked === undefined) return true;
+    deniedByCapability.push({ tool: t.name, capability: blocked });
+    return false;
+  });
+
+  const granted = withinCapabilities.filter((t) => !forbidden.has(t.name));
 
   const approvalRequired = granted
     .filter(
@@ -92,7 +116,8 @@ export function decideCapabilities(input: {
 
   return {
     granted,
-    forbidden: input.allowed.filter((t) => forbidden.has(t.name)).map((t) => t.name),
+    forbidden: withinCapabilities.filter((t) => forbidden.has(t.name)).map((t) => t.name),
+    deniedByCapability,
     approvalRequired,
   };
 }
@@ -115,5 +140,6 @@ export function admitLateTools(
     forbidden: compiled.policy.forbidden,
     autonomy: compiled.autonomy,
     humanApproval: compiled.policy.humanApproval,
+    deniedCapabilities: compiled.policy.deniedCapabilities,
   });
 }

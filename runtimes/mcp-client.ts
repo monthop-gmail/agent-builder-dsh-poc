@@ -81,6 +81,11 @@ export async function attachMcpServers(compiled: CompiledAgent): Promise<McpAtta
         name: `${ref.name}.${t.name}`,
         description: t.description ?? `Tool '${t.name}' from MCP server '${ref.name}'`,
         effect: classifyEffect(t.name, ref),
+        // Everything reached through MCP needs `mcp`, whatever it does once
+        // it gets there. A profile that denies `mcp` withholds the lot, which
+        // is the point of a capability ceiling: it works on tools whose names
+        // nobody could have known in advance.
+        capabilities: ["mcp"],
         parameters: t.inputSchema,
         async execute(args) {
           const result = (await client.callTool({ name: t.name, arguments: args })) as {

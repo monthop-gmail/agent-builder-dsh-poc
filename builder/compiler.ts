@@ -32,6 +32,13 @@ export interface CompileResult {
    * made the call, which is the whole subject of ADR-0022.
    */
   droppedByCeiling: string[];
+  /**
+   * Tools withheld because a capability they need is denied (ADR-0026 rule 2).
+   *
+   * The portable half of the ceiling: unlike `droppedByCeiling`, which needs
+   * both sides to agree on tool names, this works on any registry.
+   */
+  droppedByCapability: { tool: string; capability: string }[];
   /** True when the model resolved straight to a provider, bypassing llm-gateway (B1). */
   bypassesGateway: boolean;
 }
@@ -77,6 +84,7 @@ export function compileManifest(
     forbidden: effective.denyTools,
     autonomy,
     humanApproval: effective.requireHumanFor,
+    deniedCapabilities: effective.denyCapabilities,
   });
 
   const [model, ...modelFallbacks] = resolveModelChain(manifest.spec.model.preferred) as [
@@ -125,6 +133,7 @@ export function compileManifest(
     },
     droppedByPolicy: decision.forbidden,
     droppedByCeiling: effective.droppedByCeiling,
+    droppedByCapability: decision.deniedByCapability,
     bypassesGateway: model.route === "direct",
   };
 }

@@ -114,12 +114,32 @@ effective policy · และ profile ที่ใช้ (id + checksum ขอ�
 `manifestChecksum` **ไม่เปลี่ยนความหมาย** ยังตอบว่า *มาจาก source เดียวกันไหม*
 สองเลขตอบคนละคำถาม ดู [`compiled-agent-contract.md`](compiled-agent-contract.md)
 
-## ที่ยังเหลือ
+## เพดานเชิงคุณสมบัติ — ครึ่งที่ข้าม namespace ได้
 
-**ศัพท์ของ tool ยังคนละชุด** — ตอนนี้ไม่เงียบแล้ว (reject) แต่ยังใช้ profile จริงของ platform
-กับ registry ของเราตรง ๆ ไม่ได้ ทางออกตาม ADR-0026 ข้อ 2 คือ **เพดานเชิงคุณสมบัติ** —
-ผูก tool เข้ากับ capability แล้วให้ `deny_capabilities` ทำงานข้าม namespace ได้
-ซึ่งต้องเพิ่ม capability ให้ Tool Registry ก่อน · ยังไม่ได้ทำ
+ADR-0026 ข้อ 4 บอกว่า **deny เชิงชื่อปกป้องเฉพาะ namespace ที่มันตั้งชื่อ** ซึ่งแปลว่า
+`profiles/coding-agent` ที่ deny `github.pr.merge` **ไม่มีทาง**คุ้ม `github.merge` ของเรา —
+และนั่นไม่ใช่บั๊กที่แก้ได้ แต่เป็นข้อจำกัดตามนิยาม
+
+capability ข้ามเส้นนั้นได้ เพราะทุก registry พูดคำเดียวกัน 14 คำ
+
+`ResolvedTool` ทุกตัวจึงประกาศ `capabilities` ว่ามัน**รันอยู่บนอะไร** — คนละเรื่องกับ
+`effect` ที่บอกว่าเรียกแล้วเสียหายได้แค่ไหน:
+
+| tool | capabilities | ทำไม |
+|---|---|---|
+| `calculator` | *(ว่าง)* | ไม่ได้ออกนอก process · **ไม่ใช่ `code_execution`** เพราะนั่นแปลว่ารันโค้ดที่รับมาบน host |
+| `current_time` | *(ว่าง)* | |
+| `web_search` | `network_egress` | ยิงออก api.duckduckgo.com |
+| `github.*` | `github` · `network_egress` | tool-scope กับ host-scope คนละอัน (ADR-0009) ต้องมีทั้งคู่ |
+| tool จาก MCP | `mcp` | ประกาศตอน connect — เป็นเคสที่เพดานเชิงชื่อคุ้มไม่ได้เลย |
+
+`deny_capabilities` ของฝ่ายใดก็ตามตัดกับ `capabilities` ของ tool = **tool นั้นใช้ไม่ได้**
+(ADR-0026 ข้อ 2) รายงานแยกจาก `droppedByPolicy` เพราะเป็นคนละข้อเท็จจริง —
+*"มีคนเอ่ยชื่อ tool นี้"* กับ *"tool นี้ต้องใช้สิ่งที่ห้ามไว้"* และมีแค่อย่างหลังที่เดินทางข้ามบ้านได้
+
+**ที่ยังทำไม่ได้:** profile ที่ pin ชื่อ tool ไว้ (`tools.allow`) ยังใช้ข้าม namespace ไม่ได้อยู่ดี
+— reject ตามข้อ 3 นั่นถูกแล้ว ไม่ใช่สิ่งที่ต้องแก้ · เพดานที่พกพาได้ต้องเขียนด้วย capability
+หรือ `action_risk` ตามที่ ADR-0026 ข้อ 4 บอก
 
 **`capability_requirement` ฝั่ง manifest** — ✅ ทำแล้ว `spec.capabilities.required`
 เข้าไปอยู่ในกฎ `required ∩ deny` แล้ว ทั้งสองฝ่ายจึงอยู่ใน union จริงตามที่ ADR-0022 เขียน
