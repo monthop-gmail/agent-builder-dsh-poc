@@ -15,7 +15,7 @@ import { AUTONOMY_LEVELS, isKnownAutonomyLevel } from "./registry/policy.js";
  *    That is what stops a runtime-specific field ever being written into a
  *    manifest and quietly becoming load-bearing.
  *
- *  - There is no `spec.runtime`. A runtime is a BUILD TARGET (`--target dsh`),
+ *  - There is no `spec.runtime`. A runtime is a BUILD TARGET (`--target <id>`),
  *    the same way `--target` is a compiler flag and not a line in the source
  *    file. Manifests carrying one are rejected with an explanation.
  */

@@ -3,11 +3,11 @@ import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { validateManifest, type AgentManifest } from "../builder/validator.js";
 import { compileManifest } from "../builder/compiler.js";
-import { DshRuntime } from "../runtimes/dsh/adapter.js";
+import { OpenAiCompatibleRuntime } from "../runtimes/openai-compatible/adapter.js";
 import type { ApprovalRequest, TraceEvent } from "../builder/types.js";
 
 /**
- * Exercises the real DshRuntime — its actual agent loop, tool calling,
+ * Exercises the real OpenAiCompatibleRuntime — its actual agent loop, tool calling,
  * approval gate and trace — against a stub OpenAI-compatible server on
  * localhost.
  *
@@ -106,7 +106,7 @@ async function run(
   input: string,
   decision: "allow" | "deny" = "allow",
 ) {
-  const runtime = new DshRuntime();
+  const runtime = new OpenAiCompatibleRuntime();
   const handle = await runtime.createAgent(agent);
   const approvals: ApprovalRequest[] = [];
   const trace: TraceEvent[] = [];
@@ -126,7 +126,7 @@ async function run(
   }
 }
 
-describe("DshRuntime against an OpenAI-compatible endpoint", () => {
+describe("OpenAiCompatibleRuntime against an OpenAI-compatible endpoint", () => {
   it("routes to the gateway base URL with a bearer token", async () => {
     reset([{ text: "hello" }]);
     const agent = agentFor({ tools: { allowed: ["calculator"] } });

@@ -114,7 +114,7 @@ $ grep -rn "deepseek-harness\|@deepseek-ai\|cordis" runtimes/ builder/ cli/
 (ไม่พบ)
 ```
 
-`runtimes/dsh/adapter.ts` เขียน tool loop เอง 234 บรรทัด ยิง `fetch` ใส่ `/chat/completions`
+`runtimes/openai-compatible/adapter.ts` เขียน tool loop เอง 234 บรรทัด ยิง `fetch` ใส่ `/chat/completions`
 สิ่งที่มันเป็นจริงคือ adapter ชื่อ **`openai-compatible`** ซึ่งเป็นงานที่ดีและใช้ได้จริง แต่ไม่ใช่ DSH
 
 → DoD ข้อ 5 `DSH Runtime ✅` ยังไม่จริง `dsh-runtime.test.ts` พิสูจน์ว่า loop ที่เราเขียนถูก ไม่ได้พิสูจน์ว่าต่อกับ DSH ได้

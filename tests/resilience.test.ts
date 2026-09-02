@@ -5,7 +5,7 @@ import { join, resolve } from "node:path";
 import { loadManifest } from "../builder/loader.js";
 import { validateManifest, type AgentManifest } from "../builder/validator.js";
 import { compileManifest } from "../builder/compiler.js";
-import { DshRuntime } from "../runtimes/dsh/adapter.js";
+import { OpenAiCompatibleRuntime } from "../runtimes/openai-compatible/adapter.js";
 import { openAuditLog } from "../builder/audit.js";
 import { RunAborted, executedTools } from "../builder/errors.js";
 import { startOpenAiStub, type OpenAiStub } from "./support/openai-stub.js";
@@ -22,7 +22,7 @@ import type { ApprovalRequest, TraceEvent } from "../builder/types.js";
 
 let stub: OpenAiStub;
 /** No backoff: the wait is the thing under test least worth reproducing. */
-const runtime = () => new DshRuntime({ attempts: 3, baseDelayMs: 0 });
+const runtime = () => new OpenAiCompatibleRuntime({ attempts: 3, baseDelayMs: 0 });
 
 beforeAll(async () => {
   stub = await startOpenAiStub();
@@ -148,7 +148,7 @@ describe("audit log", () => {
     const path = join(dir, "audit.jsonl");
     try {
       const agent = await compiled("code-reviewer.yaml");
-      const sink = await openAuditLog(path, { agent, target: "dsh", input: "review it" });
+      const sink = await openAuditLog(path, { agent, target: "openai-compatible", input: "review it" });
       sink.record({ at: "2026-09-02T00:00:00.000Z", kind: "tool_call", detail: { tool: "github.read" } });
       sink.record({ at: "2026-09-02T00:00:01.000Z", kind: "finish", detail: { toolCalls: 1 } });
       await sink.close();

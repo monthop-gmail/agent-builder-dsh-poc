@@ -20,12 +20,14 @@ import { attachMcpServers, type McpConnection } from "../mcp-client.js";
 import { indexByWireName } from "../../builder/tool-names.js";
 
 /**
- * DshRuntime — the DeepSeek Harness.
+ * OpenAiCompatibleRuntime — our own agent loop over any OpenAI-compatible
+ * chat-completions endpoint: llm-gateway, opencode zen, DeepSeek's own API,
+ * a local server. Model call -> tool calls -> results -> repeat.
  *
- * This is the only file in the project that knows how DSH executes an agent.
- * It drives an OpenAI-compatible chat-completions endpoint (DeepSeek's own,
- * or llm-gateway in front of it) and runs the tool loop itself: model call ->
- * tool calls -> results -> repeat.
+ * It used to be called `dsh`, which was wrong: it never imported anything
+ * from DeepSeek Harness and never spoke to it. The real DSH integration
+ * lives under that name now; this one is named for what it actually does,
+ * which is also what makes it the widest-reach target in the repo.
  *
  * Two invariants this file must never break:
  *
@@ -55,7 +57,7 @@ interface ChatResponse {
   error?: { message?: string };
 }
 
-interface DshHandle extends AgentHandle {
+interface OpenAiHandle extends AgentHandle {
   compiled: CompiledAgent;
   connections: McpConnection[];
   /** wire-safe function name -> real tool */
@@ -64,8 +66,8 @@ interface DshHandle extends AgentHandle {
   approvalRequired: Set<string>;
 }
 
-export class DshRuntime implements AgentRuntime {
-  readonly id = "dsh";
+export class OpenAiCompatibleRuntime implements AgentRuntime {
+  readonly id = "openai-compatible";
 
   /** Injectable so tests can drop the backoff instead of waiting it out. */
   constructor(private readonly retry: RetryPolicy = DEFAULT_RETRY) {}
@@ -81,9 +83,9 @@ export class DshRuntime implements AgentRuntime {
 
     const tools = indexByWireName([...compiled.tools, ...mcp.tools]);
 
-    const handle: DshHandle = {
+    const handle: OpenAiHandle = {
       runtimeId: this.id,
-      sessionId: `dsh-${compiled.name}-${Date.now()}`,
+      sessionId: `oai-${compiled.name}-${Date.now()}`,
       compiled,
       connections: mcp.connections,
       tools,
@@ -96,7 +98,7 @@ export class DshRuntime implements AgentRuntime {
   }
 
   async run(agent: AgentHandle, input: string, ctx: RunContext): Promise<AgentResult> {
-    const handle = agent as DshHandle;
+    const handle = agent as OpenAiHandle;
     const { compiled } = handle;
 
     const trace: TraceEvent[] = [];
@@ -113,7 +115,7 @@ export class DshRuntime implements AgentRuntime {
      * would tell the caller nothing happened.
      */
     const abort = (message: string): never => {
-      throw new RunAborted(`dsh: ${message}`, {
+      throw new RunAborted(`openai-compatible: ${message}`, {
         output: "",
         sessionId: handle.sessionId,
         trace,
@@ -246,7 +248,7 @@ export class DshRuntime implements AgentRuntime {
 
   async resume(_compiled: CompiledAgent, sessionId: string): Promise<AgentHandle> {
     throw new Error(
-      `DshRuntime.resume('${sessionId}'): this runtime keeps no session across processes. ` +
+      `OpenAiCompatibleRuntime.resume('${sessionId}'): this runtime keeps no session across processes. ` +
         `Use --target acp for a runtime that does.`,
     );
   }
