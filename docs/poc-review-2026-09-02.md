@@ -678,7 +678,7 @@ session ที่อยู่แค่ในหน่วยความจำจ
 
 ### 12.4 ที่ยังค้าง
 
-- **เปลี่ยนชื่อ `dsh` → `openai-compatible`** แล้วให้ `dsh` เป็น preset compiler + acp driver (ข้อ 5.6)
+- ~~**เปลี่ยนชื่อ `dsh` → `openai-compatible`** แล้วให้ `dsh` เป็น preset compiler~~ ✅ ดูข้อ 14
 - ~~**`unsupported()` ยังแค่เตือน**~~ ✅ ทำแล้ว ดูข้อ 13
 - **agent identity** (ข้อ 3.3) · **sub-agent P5** · **Issue → PR P6**
 
@@ -745,3 +745,99 @@ $ echo $?
 `--target acp` ใช้กับ `code-reviewer.yaml` และ `workspace-researcher.yaml` **ไม่ได้แล้ว**
 เพราะทั้งคู่มี `policy.forbidden` นี่คือพฤติกรรมที่ถูก ไม่ใช่ regression — ที่ผ่านมามันรันได้
 โดยไม่บังคับ policy ต่างหากที่เป็นปัญหา manifest ที่ acp รันได้ต้องเขียนตามที่ acp honour ได้จริง
+
+
+---
+
+## 14. `dsh` ตัวจริง — preset compiler
+
+ปิดข้อ 5.6
+
+```
+npm test    111 passed (111)     ← เดิม 95
+```
+
+### 14.1 rename ก่อน
+
+target เดิมชื่อ `dsh` ที่ไม่เคยต่อกับ DeepSeek Harness → **`openai-compatible`**
+ตามสิ่งที่มันทำจริง ชื่อ `dsh` ว่างให้ตัวจริง (ข้อ 4.1)
+
+### 14.2 `dsh` = `acp` + ขั้นตอนก่อน agent เกิด
+
+`DshRuntime extends AcpRuntime` — **ไม่มีโค้ด protocol เลยสักบรรทัด** session · prompt ·
+permission · resume มาจาก `AcpRuntime` ทั้งหมด ผ่าน seam ใหม่ชื่อ `AcpLauncher`
+
+สิ่งที่มันเพิ่มคือ `runtimes/dsh/preset.ts`: `CompiledAgent` → Cordis patch ที่ DSH boot ด้วย
+
+### 14.3 กลไกสองอย่าง ใช้ตรงที่วัดแล้วว่าได้ผล
+
+จาก §9.5 ที่วัดไว้:
+
+```
+sandbox กัน file effect ได้ และ fail closed  →  file tool ยัง mount ให้ DSH_PERMISSION_MODE ตัดสิน
+sandbox ไม่กัน exec/network (curl → 200)     →  shell ต้องกันด้วยการไม่ mount
+```
+
+| autonomy | `DSH_PERMISSION_MODE` | ถูกกันออก |
+|---|---|---|
+| 0 observe | `read-only` | shell · delegation · web |
+| 1 read | `read-only` | shell · delegation |
+| 2 propose | `workspace-write` | shell · delegation |
+| 3 act | `danger-full-access` | delegation |
+
+**web ถูกกันที่ level 0** เพราะ `web_fetch` เป็น read effect ก็จริง แต่ URL ที่ fetch
+เป็นช่องส่งข้อมูลออกได้ และ harness ไม่ถามเราก่อนยิงเน็ต ที่ level 0 ซึ่งแปลว่า
+"ไม่มีอะไรเกิดขึ้นโดยไม่มีคนอนุมัติ" ทางเดียวที่รักษาเส้นนั้นได้คือไม่ mount
+
+### 14.4 ผลวัดจริง
+
+```
+$ run manifests/dsh-observer.yaml --target dsh \
+      --input "List the exact names of every tool you can call"
+
+create_goal · edit · exit_plan_mode · get_goal · glob · grep
+job_kill · job_list · job_output · read · read_image · skill
+str_replace_editor · todo_write · update_goal · web_fetch · web_search · write
+```
+
+**40 tools → 18** หายไป: `bash` · `subagent` · `subagent_fork` · `list_agents` ·
+`interrupt_agent` · `ralph` · `workflow`
+
+### 14.5 บั๊กที่มีแต่การรันจริงเท่านั้นที่จับได้
+
+รอบแรกได้ 20 ตัว — `subagent_fork` กับ `list_agents` ยังอยู่ ทั้งที่ปิด `tool-subagent`
+และ `tool-subagent-control` ไปแล้ว สาเหตุ:
+
+```yaml
+- id: tool-subagent           name: dsh-tool-subagent   config: {toolName: subagent}
+- id: tool-subagent-fork      name: dsh-tool-subagent   config: {toolName: subagent_fork}
+- id: tool-subagent-list-agents  name: dsh-tool-subagent-control/list-agents
+```
+
+**Cordis patch ปิดตาม row id ไม่ใช่ตาม package** และ base bundle mount package เดียวกัน
+ซ้ำหลาย row ด้วย config ต่างกัน
+
+นี่คือหลักการเดียวกับ §5.3 ("หักชื่อ tool ≠ หักความสามารถ") ลงมาอีกชั้นหนึ่ง —
+เขียนไว้เองแล้วยังเกือบพลาดซ้ำ เทสต์จึงบันทึกเหตุผลไว้ในตัว test
+
+### 14.6 สิ่งที่ยัง honour ไม่ได้ — ไม่เปลี่ยนจาก `acp`
+
+`policy.forbidden` ยังบังคับไม่ได้ `dsh-mcp-client` bridge tool ทั้งเซ็ตของ server
+config มีแค่ `serverName` · `toolCallTimeoutMs` · `failOnStartupError` ไม่มี allowlist
+→ `--target dsh` ยังปฏิเสธ manifest ที่มี `policy.forbidden` ตามกติกาข้อ 13
+
+`tools.local` ก็เหมือนเดิม — tool ของเราเป็น TypeScript ในรีโปนี้ ส่งข้าม process ไม่ได้
+
+### 14.7 ขอบเขตของเทสต์
+
+`dsh` อยู่ใน `OFFLINE_RUNTIMES` และรัน conformance กับ **stub agent ตัวเดียวกับ `acp`**
+ซึ่งทดสอบ**สัญญาของ adapter** — compose patch → launch → ขับ session → cleanup
+**ไม่ได้ทดสอบว่า harness ตัวจริงรับ patch** ส่วนนั้นตรวจด้วยมือ:
+
+```bash
+DSH_COMMAND=<path>/node_modules/.bin/dsh DSH_HOME=<path>/.dsh-home \
+  node dist/cli/index.js run manifests/dsh-observer.yaml --target dsh \
+    --input "List the exact names of every tool you can call, one per line"
+```
+
+ส่วนที่เป็นของใหม่จริง ๆ คือ patch — `dsh-preset.test.ts` ครอบไว้ 8 เคส

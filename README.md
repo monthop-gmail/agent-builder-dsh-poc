@@ -14,7 +14,7 @@
         └───────┬───────┘
                 │  CompiledAgent  (runtime-neutral)
                 ▼
-         Runtime Adapter               ← --target openai-compatible | pi | acp | mock
+         Runtime Adapter               ← --target openai-compatible | pi | acp | dsh | mock
                 │
                 ▼
       Runtime ปลายทาง
@@ -166,6 +166,39 @@ refusing to run: target 'acp' cannot honour this manifest.        (exit 1)
 **ช่องว่างที่ทำให้ข้อจำกัดหายไป → ปฏิเสธ · ช่องว่างที่ทำให้ความสามารถหายไป → เตือน**
 กติกาและตารางระดับอยู่ใน [`docs/runtime-adapter.md`](docs/runtime-adapter.md)
 
+### `dsh` — คุม tool ของ harness ด้วย patch ที่ compile จาก manifest
+
+`--target dsh` คือ `acp` บวกขั้นตอนก่อน agent เกิด: compile `CompiledAgent` เป็น Cordis patch
+แล้วให้ DSH boot ด้วย patch นั้น protocol ทั้งหมดใช้ของ `AcpRuntime` ไม่มีโค้ดซ้ำ
+
+```bash
+DSH_COMMAND=./node_modules/.bin/dsh \
+  agent-builder run manifests/dsh-observer.yaml --target dsh
+```
+
+วัดจริงกับ harness ตัวจริง — session ธรรมดามี **40 tools รวม `bash`** ส่วน manifest ที่ autonomy 1
+ได้ **18 ตัว ไม่มี `bash` ไม่มี `subagent`**
+
+กลไกสองอย่าง ใช้ตรงที่วัดแล้วว่าได้ผล:
+
+```
+sandbox กัน file effect ได้ และ fail closed  →  file tool ยัง mount ให้ DSH_PERMISSION_MODE ตัดสิน
+sandbox ไม่กัน exec/network                  →  shell ต้องกันด้วยการไม่ mount
+```
+
+| autonomy | sandbox | tool ที่ถูกกันออก |
+|---|---|---|
+| 0 observe | `read-only` | shell · delegation · **web** |
+| 1 read | `read-only` | shell · delegation |
+| 2 propose | `workspace-write` | shell · delegation |
+| 3 act | `danger-full-access` | delegation |
+
+**delegation ถูกกันทุกระดับ** — agent ที่ spawn agent อื่นได้ หลุดจาก tool set ที่ patch เพิ่งเลือกไป
+และ sub-agent ยังเขียนใน manifest ไม่ได้ (P5)
+
+`policy.forbidden` ยัง**บังคับไม่ได้** เหมือน `acp` — `dsh-mcp-client` bridge tool ทั้งเซ็ตของ MCP server
+ไม่มี field ให้เลือกบางตัว `--target dsh` จึงยังปฏิเสธ manifest ที่มี `policy.forbidden`
+
 ### run ที่ล้มเหลว ห้ามโกหกว่าไม่มีอะไรเกิดขึ้น
 
 free tier ตอบ 429/502/503 เป็นเรื่องปกติ — ทดสอบจริงกับ opencode zen เจอ 5 ครั้งใน 8 รอบ
@@ -224,13 +257,15 @@ builder/
   registry/              tools · skills · mcp · models · policy · runtimes · capabilities
 runtimes/
   openai-compatible/     loop ที่เขียนเอง บน endpoint แบบ OpenAI ตัวไหนก็ได้
+  dsh/adapter.ts         DeepSeek Harness ตัวจริง — AcpRuntime + preset compiler
+  dsh/preset.ts          CompiledAgent → Cordis patch
   pi/adapter.ts          Pi agent harness — Pi เป็นเจ้าของ loop
   acp/adapter.ts         ขับ agent ของคนอื่นผ่าน Agent Client Protocol
   acp/client.ts          JSON-RPC ndjson บน stdio ของ child process
   mock/adapter.ts        runtime จริงที่ไม่ต่อเน็ต ใช้ใน CI
   mcp-client.ts          MCP → ResolvedTool
 cli/index.ts             validate · inspect · build · run · targets
-tests/                   manifest · policy · portability · conformance · openai-compatible-runtime · pi-runtime · acp-runtime · mcp-policy · resilience · capabilities
+tests/                   manifest · policy · portability · conformance · openai-compatible-runtime · pi-runtime · dsh-preset · acp-runtime · mcp-policy · resilience · capabilities
   support/acp-stub-agent.mjs  ACP agent จำลอง เก็บ session ลงไฟล์เพื่อทดสอบ resume ข้าม process
   support/openai-stub.ts endpoint ปลอมบน 127.0.0.1 ให้ conformance รันได้ทุก adapter
   fixtures/              manifest ที่มีไว้ทดสอบอย่างเดียว
@@ -257,7 +292,7 @@ tests/                   manifest · policy · portability · conformance · ope
 | 3 | Capability Registry | ✅ | 7 registry: tool · skill · mcp · model · policy · runtime · capability-gap |
 | 4 | Builder / Compiler | ✅ | `CompiledAgent` ไม่มี type ของ vendor |
 | 5 | OpenAI-compatible Runtime | ✅ | `openai-compatible-runtime.test.ts` — agent loop จริงยิงใส่ stub บน localhost |
-| 5b | **DSH Runtime ตัวจริง** | ⏳ | ยังไม่ต่อกับ `deepseek-ai/deepseek-harness` — ที่ต่อได้แล้วคือผ่าน `--target acp` (ดู [`spikes/acp/`](spikes/acp/)) |
+| 5b | **DSH Runtime ตัวจริง** | ✅ | `--target dsh` — patch ที่ generate ถูก harness ตัวจริงรับ tool ลดจาก 40 เหลือ 18 และ `bash` หายไป |
 | 6 | MCP | ✅ | `mcp-policy.test.ts` — ยิงใส่ MCP server จริงบน localhost · policy คุม MCP tool ได้ |
 | 7 | Sub-agent | ⏳ P5 | schema รับ `spec.subagents` แล้ว ยังไม่ compile |
 | 8 | Issue → PR ⭐ | ⏳ P6 | `code-reviewer.yaml` + `github.*` tools พร้อมแล้ว |
