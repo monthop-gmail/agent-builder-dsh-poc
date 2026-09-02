@@ -112,6 +112,30 @@ export const VECTORS: Vector[] = [
   },
 ];
 
+/** Vectors whose compiled agent has at least one tool needing a human. */
+export const GATED_VECTORS = ["observer", "proposer", "approval"] as const;
+
+/** Vectors whose compiled agent grants at least one tool. */
+export const TOOLED_VECTORS = ["reader", "proposer", "actor", "forbidden"] as const;
+
+/**
+ * Wire name of the tool each gated vector's peer should ask for.
+ *
+ * A runtime only reaches the approval gate when its peer decides to call
+ * something, so the stand-ins have to be told which one. Keeping the mapping
+ * here rather than in the test keeps "what this vector gates" next to the
+ * vector itself.
+ */
+export const GATED_TOOL: Record<string, { manifest: string; wire: string; args: Record<string, unknown> }> = {
+  observer: { manifest: "current_time", wire: "current_time", args: {} },
+  proposer: { manifest: "github.merge", wire: "github_merge", args: { repo: "acme/widgets", number: 1 } },
+  approval: {
+    manifest: "github.comment",
+    wire: "github_comment",
+    args: { repo: "acme/widgets", number: 1, body: "looks fine" },
+  },
+};
+
 export function vector(name: string): Vector {
   const found = VECTORS.find((v) => v.name === name);
   if (!found) throw new Error(`no conformance vector named '${name}'`);
