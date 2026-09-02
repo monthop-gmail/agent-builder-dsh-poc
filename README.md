@@ -2,7 +2,7 @@
 
 > เขียน Agent เป็น Manifest หนึ่งไฟล์ แล้ว build ลง runtime ไหนก็ได้
 
-**สถานะ: 🟢 PoC ใช้งานได้ · canonical Agent Builder** — `npm test` ผ่าน 112 test, CLI รันได้จริง
+**สถานะ: 🟢 PoC ใช้งานได้ · canonical Agent Builder** — `npm test` ผ่านครบทุก suite ไม่มี skip, CLI รันได้จริง
 
 > repo นี้คือ implementation หลักของ Agent Builder
 > [`agent-builder-pi-poc`](https://github.com/monthop-gmail/agent-builder-pi-poc) ซึ่งเป็นที่ที่แนวคิดนี้เริ่ม
@@ -88,6 +88,8 @@ agent-builder run manifests/researcher.yaml --target openai-compatible --input "
 | `run <manifest> --target <id>` | compile แล้วรัน (`--audit-log <f>` เก็บ trace · `--resume <id>` ต่อ session เดิม) |
 | `targets` | รายชื่อ target + ตาราง autonomy level |
 | `npm run docs:capabilities` | สร้าง [`docs/capability-matrix.md`](docs/capability-matrix.md) ใหม่จากโค้ด |
+
+📚 เอกสารทั้งหมดและ contract สี่ตัว: [`docs/`](docs/README.md)
 | `models [--provider <n>]` | catalog ในเครื่อง + ถาม endpoint จริงว่าเสิร์ฟ model อะไร |
 
 ---
