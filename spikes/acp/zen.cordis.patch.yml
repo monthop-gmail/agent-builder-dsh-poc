@@ -1,0 +1,22 @@
+# Spike overlay: route DSH's LLM through opencode zen (OpenAI-compatible),
+# and point the ACP bridge at it. Nothing else is changed.
+- id: llm-pi-ai
+  config:
+    providers:
+      zen:
+        displayName: opencode zen
+        apiKeyEnv: OPENCODE_ZEN_API_KEY
+        baseURL: https://opencode.ai/zen/v1
+        api: openai-completions
+        models:
+          - id: nemotron-3-ultra-free
+            contextWindow: 200000
+          - id: mimo-v2.5-free
+            contextWindow: 200000
+          - id: laguna-s-2.1-free
+            contextWindow: 200000
+
+- id: acp
+  config:
+    provider: zen
+    model: nemotron-3-ultra-free

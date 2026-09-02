@@ -282,9 +282,7 @@ runtimes/
 
 ## 7. ที่ยังไม่ได้พิสูจน์
 
-- **DSH ตัวจริง** — spike ผ่าน ACP ยังไม่จบ (`npm install @deepseek-ai/dsh` ใช้เวลานานมาก)
-  ที่เตรียมไว้แล้ว: ACP client แบบ raw ndjson + `zen.cordis.patch.yml` ชี้ `llm-pi-ai` ไป opencode zen
-  คำถามที่ spike ต้องตอบ: ACP แบกอะไรได้จริง / session ได้ tool อะไรติดมาบ้าง / ชี้ไป zen ได้ไหม
+- **DSH ตัวจริง** — ✅ ทำแล้ว ดูข้อ 9
 - **ACP มีเจ้าอื่นรองรับแล้วแค่ไหน** — ถ้ามีเยอะ การเขียน ACP adapter ตัวเดียวคุ้มกว่าเขียนราย vendor มาก ยังไม่ได้ตรวจ
 - **cloudflare-os** — อ่านโค้ดอย่างเดียว ยังไม่ได้รัน (พักไว้ตามที่ตกลง)
 - **P6 Issue → PR** — ยังไม่แตะ
@@ -314,3 +312,146 @@ runtimes/
 **Open question ของ brief เรื่อง `cloudflare-os` อยู่ชั้นไหน** — คำตอบคือทั้งสอง และนั่นคือเหตุผลที่ตอบยาก
 มันเป็น environment ที่มี runtime อยู่ข้างใน พร้อม security model ของตัวเอง
 ต้องแยกว่าจะใช้เป็น **application** (ทีมใช้งาน) หรือเป็น **deployment target** (ส่ง agent ไปลง) — คนละชั้นกัน
+
+
+---
+
+## 9. ผล spike: DeepSeek Harness ตัวจริงผ่าน ACP
+
+รันจริงเมื่อ 2026-09-02 · `@deepseek-ai/dsh@0.1.2-alpha.4` · `dsh-acp-app@0.1.2-alpha.4`
+ACP client เขียนเอง (raw ndjson JSON-RPC) · โมเดล `nemotron-3-ultra-free` ผ่าน opencode zen
+
+### 9.1 ติดตั้ง — ต้องใช้ pnpm
+
+| | ผล |
+|---|---|
+| `npm install @deepseek-ai/dsh` | ❌ 30+ นาที แล้ว **OOM** (`JavaScript heap out of memory`) สองรอบ |
+| `pnpm add @deepseek-ai/dsh` | ✅ **12.9 วินาที** (504 packages, 253 MB) |
+
+npm พังตอนสร้าง flat tree ในหน่วยความจำ · pnpm ใช้ content-addressable store + symlink
+
+### 9.2 ชี้ DSH ไป opencode zen ได้ — เป็น config ล้วน ไม่แก้โค้ด
+
+```yaml
+- id: llm-pi-ai
+  config:
+    providers:
+      zen:
+        apiKeyEnv: OPENCODE_ZEN_API_KEY
+        baseURL: https://opencode.ai/zen/v1
+        api: openai-completions
+        models: [{id: nemotron-3-ultra-free, contextWindow: 200000}]
+- id: agent-default-model      # หรือ id: acp สำหรับ profile acp
+  config: {provider: zen, model: nemotron-3-ultra-free}
+```
+
+```
+$ dsh --profile headless --patch ./zen-headless.cordis.patch.yml \
+      "Reply with exactly: DSH-ON-ZEN-OK. Do not use any tools."
+DSH-ON-ZEN-OK
+```
+
+ACP คืน config option กลับมาเป็น select โดยมี zen อยู่ข้าง model ของ DeepSeek เอง
+`currentValue: ["zen","nemotron-3-ultra-free"]` — เปลี่ยนกลางคันได้ด้วย `session/set_config_option`
+
+### 9.3 ACP ใช้งานได้ครบ
+
+```
+✓ initialize
+   agentCapabilities: {"mcpCapabilities":{"http":true},
+                       "sessionCapabilities":{"close":{},"list":{},"resume":{}}}
+✓ session/new (+MCP over HTTP + bearer)
+✓ session/prompt        stopReason: end_turn
+✓ session/list -> 5 resumable
+✓ session/request_permission  (ดูข้อ 9.5)
+```
+
+**`resume` ได้มาฟรีจากโปรโตคอล** — เป็นสิ่งที่ทั้งสอง PoC ยัง `throw` อยู่
+
+### 9.4 capability leak — ยืนยันด้วยการรัน ไม่ใช่การอ่าน
+
+ให้ agent ลิสต์ tool ตัวเอง ได้ **40 ตัว**:
+
+```
+bash  write  edit  read  glob  grep  web_fetch  web_search
+subagent  subagent_fork  ralph  workflow  skill  str_replace_editor
+todo_write  goal/job/agent-control ...                          ← built-in 25 ตัว
+
+mcp__collaboration__get_workspace_context
+mcp__collaboration__post_message
+mcp__collaboration__resolve_decision        ← ตัวที่ manifest สั่ง forbidden
+...                                                              ← MCP ครบ 15 ตัว
+```
+
+→ **`policy.forbidden` ตามชื่อ tool บังคับไม่ได้ผ่าน ACP** MCP มาครบทุกตัวรวมตัวที่ห้าม
+→ **ชื่อ tool เป็นแบบที่สาม**: `mcp__collaboration__resolve_decision`
+   เทียบ `collaboration.get_tasks` (dsh-poc) และ `collab_get_tasks` (pi-poc)
+   policy rule ที่เขียนด้วยชื่อใน manifest จะไม่ตรงกับชื่อที่โมเดลเห็น
+
+### 9.5 การบังคับสามชั้นที่ไม่ทดแทนกัน
+
+ทดสอบด้วย `DSH_PERMISSION_MODE=read-only` (โหมดเข้มสุดที่ DSH ship มา) ทั้งสามเคส:
+
+| ทดสอบ | ผล |
+|---|---|
+| `write` ไฟล์ ผ่าน **headless** (ไม่มี approval answerer) | ❌ `[sandbox: file access denied under read-only mode]` escalate ไม่ผ่าน **fail closed** ไฟล์ไม่ถูกสร้าง |
+| `bash` + `curl https://example.com` | ✅ **รันได้ HTTP 200** |
+| `write` ไฟล์ ผ่าน **ACP** (client auto-approve) | ✅ **ไฟล์ถูกสร้าง** |
+
+ลำดับเหตุการณ์เคสที่สาม:
+
+```
+· tool_call        write {"file_path":"acp-approval-test.txt","content":"APPROVED"}
+· tool_call_update status: failed                      ← sandbox ปฏิเสธ
+· tool_call        write {..., "sandbox_permissions":"workspace-write",
+                          "justification":"..."}       ← agent ขอ escalate เอง
+⚑ request_permission  options=allow_once,reject_once → answering allow_once
+· tool_call_update status: completed                   ← ไฟล์ถูกสร้าง
+```
+
+สรุปเป็นตาราง:
+
+```
+ชื่อ tool  (forbidden)     ← ต้องคุมที่ preset เท่านั้น · ACP ทำไม่ได้
+effect ไฟล์ (sandbox)      ← DSH_PERMISSION_MODE บังคับได้ และ fail closed จริง
+เน็ต / exec               ← ไม่มีใครคุม ต้องขังนอก process
+```
+
+**ข้อสรุปที่กระทบ manifest โดยตรง:**
+
+1. เคส `forbidden: [github.merge]` แล้วโมเดลพิมพ์ `gh pr merge` **ยังยืนอยู่ และยืนแม้ในโหมดเข้มสุด**
+   agent ที่มี `bash` + เน็ต เรียก HTTP API อะไรก็ได้โดยไม่แตะ tool ชื่อนั้นเลย
+   → manifest ที่มี `tools.allowed` แล้วคิดว่าปลอดภัย เป็นความเข้าใจผิดเชิงระบบ
+   ตราบใดที่ runtime ปลายทางแถมเชลล์มาให้
+2. **client ที่ตอบ approval อัตโนมัติ ทำให้ sandbox กลายเป็นแค่คำแนะนำ**
+   `--approve auto` ของเราจะปลด `read-only` ของ DSH ให้เป็น `workspace-write` เงียบ ๆ
+   ตามคำขอของ agent เอง → ถ้าทำ acp adapter ต้องกำหนดว่า autonomy level ไหน
+   ถึงจะยอมตอบ `allow_once` ให้คำขอ escalate **ไม่ใช่ยกให้ `--approve` ตัดสินอย่างเดียว**
+3. `autonomy.level` ควรแมปไป `DSH_PERMISSION_MODE` (`read-only` / `workspace-write` /
+   `danger-full-access`) เพราะนั่นคือชั้นที่บังคับได้จริง ส่วน `forbidden` รายชื่อยังต้องใช้ preset
+
+### 9.6 ความเสี่ยงเรื่องเวอร์ชัน — ACP อยู่แค่ช่อง alpha
+
+```
+Error: stdio app: the launcher must provide ctx.appExit and ctx.appReady
+       before the tree mounts
+```
+
+| package | latest | alpha |
+|---|---|---|
+| `@deepseek-ai/dsh` | 0.1.1-rc.2 | 0.1.2-alpha.4 |
+| `@deepseek-ai/dsh-acp-app` | 0.1.2-alpha.2 | 0.1.2-alpha.4 |
+
+`dsh-acp-app` ไม่มีเวอร์ชันไหนเข้ากับ `dsh` ตัว `latest` ได้เลย — **ช่อง latest รัน ACP ไม่ได้**
+ต้องขึ้น alpha ทั้งคู่ และ npm ที่ published ยังไม่ ship template ของ profile `acp`
+(`PROFILE_TEMPLATES` มีแค่ `web` กับ `headless`) ต้องสร้างเองด้วย
+`dsh plugin --profile acp add @deepseek-ai/dsh-acp-app@<version ตรงกัน>`
+
+→ **เหตุผลสนับสนุนให้ adapter ผูกกับ ACP spec ไม่ใช่ผูกกับ DSH**
+และต้องทดสอบกับ agent เจ้าอื่นที่พูด ACP ด้วย ไม่ใช่ DSH ตัวเดียว
+
+### 9.7 ไฟล์ที่ใช้ทำ spike
+
+`acp-spike.mjs` (ACP client แบบ raw ndjson ~110 บรรทัด) · `zen.cordis.patch.yml` ·
+`zen-headless.cordis.patch.yml` · `zen-mcp.cordis.patch.yml`
+ยังไม่ได้ commit เข้า repo — อยู่ในพื้นที่ชั่วคราวของ session ถ้าจะเก็บต้องย้ายเข้ามา

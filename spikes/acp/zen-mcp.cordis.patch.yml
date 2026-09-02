@@ -1,0 +1,27 @@
+- id: llm-pi-ai
+  config:
+    providers:
+      zen:
+        displayName: opencode zen
+        apiKeyEnv: OPENCODE_ZEN_API_KEY
+        baseURL: https://opencode.ai/zen/v1
+        api: openai-completions
+        models:
+          - id: nemotron-3-ultra-free
+            contextWindow: 200000
+
+- id: agent-default-model
+  config:
+    provider: zen
+    model: nemotron-3-ultra-free
+
+- insert:
+    - id: mcp-collab
+      name: '@deepseek-ai/dsh-mcp-client'
+      config:
+        transport: streamable-http
+        serverName: collaboration
+        url: https://ai-collaboration-mcp.monthop-gmail.workers.dev/mcp
+        headers:
+          Authorization: Bearer ${AI_COLLAB_MCP_TOKEN}
+        failOnStartupError: true
