@@ -70,7 +70,7 @@ adapter คืน **ชื่อเปล่า ๆ** เท่านั้น �
 
 ## ตัวอย่าง: DSH ทำงานยังไง
 
-`runtimes/dsh/adapter.ts` ขับ OpenAI-compatible chat completions endpoint แล้ววน loop เอง:
+`runtimes/openai-compatible/adapter.ts` ขับ OpenAI-compatible chat completions endpoint แล้ววน loop เอง:
 
 ```text
 system + user
@@ -139,11 +139,10 @@ signature จึงเป็น `resume(compiled, sessionId)` — manifest ถ�
 
 ## เรื่องชื่อ `dsh`
 
-`dsh` ตอนนี้ **ไม่ได้ต่อกับ DeepSeek Harness** มันคือ agent loop ที่เราเขียนเองบน
-OpenAI-compatible API ซึ่งใช้งานได้ดีและครอบคลุม gateway ทุกตัว แต่ชื่อไม่ตรงของ
+เคยมี target ชื่อ `dsh` ที่ **ไม่ได้ต่อกับ DeepSeek Harness เลย** — ไม่มี `@deepseek-ai/dsh`
+ใน dependency ไม่มี import ที่ไหน มันคือ agent loop ที่เราเขียนเองบน OpenAI-compatible API
+ซึ่งใช้งานได้ดีและครอบคลุม gateway ทุกตัว แต่ชื่อไม่ตรงกับของ
 
-DeepSeek Harness ตัวจริงมีอยู่ (`deepseek-ai/deepseek-harness`) และต่อได้ผ่าน ACP —
-ทดสอบแล้วใน [`../spikes/acp/`](../spikes/acp/) ผลและข้อจำกัดอยู่ใน
-[`poc-review-2026-09-02.md` หัวข้อ 9](poc-review-2026-09-02.md)
-
-ข้อเสนอคือแยกเป็น `openai-compatible` / `acp` / `dsh` — เหตุผลอยู่ในหัวข้อ 5.6 ของบันทึกเดียวกัน
+ตอนนี้มันชื่อ **`openai-compatible`** ตามสิ่งที่มันทำจริง และชื่อ `dsh` ว่างไว้ให้ตัวจริง
+DeepSeek Harness ต่อได้แล้วผ่าน `--target acp` (ทดสอบใน [`../spikes/acp/`](../spikes/acp/))
+เหตุผลของการแยกอยู่ในหัวข้อ 5.6 ของ [`poc-review-2026-09-02.md`](poc-review-2026-09-02.md)

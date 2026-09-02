@@ -1,6 +1,6 @@
 # agent-builder-dsh-poc
 
-> เขียน Agent เป็น Manifest หนึ่งไฟล์ แล้ว build ลง runtime ไหนก็ได้ — DeepSeek Harness เป็นตัวแรก
+> เขียน Agent เป็น Manifest หนึ่งไฟล์ แล้ว build ลง runtime ไหนก็ได้
 
 **สถานะ: 🟢 PoC ใช้งานได้** — `npm test` ผ่าน 45 test, CLI รันได้จริง
 ยังไม่ใช่ production: ไม่มี UI, ไม่มี database, sub-agent ยังไม่ทำ (P5)
@@ -14,10 +14,10 @@
         └───────┬───────┘
                 │  CompiledAgent  (runtime-neutral)
                 ▼
-         Runtime Adapter               ← --target dsh | pi | acp | mock
+         Runtime Adapter               ← --target openai-compatible | pi | acp | mock
                 │
                 ▼
-      DeepSeek Harness Runtime
+      Runtime ปลายทาง
        model · tools · MCP · trace
 ```
 
@@ -32,7 +32,7 @@
 
 ```bash
 $ agent-builder build manifests/code-reviewer.yaml --target mock --out m.json
-$ agent-builder build manifests/code-reviewer.yaml --target dsh  --out d.json
+$ agent-builder build manifests/code-reviewer.yaml --target openai-compatible  --out d.json
 $ diff <(jq 'del(.target,.builtAt)' m.json) <(jq 'del(.target,.builtAt)' d.json)
    # ไม่มี diff
 ```
@@ -47,19 +47,19 @@ npm run build
 
 # ไม่ต้องใช้ key เลย — mock เป็น runtime จริงที่ไม่ต่อเน็ต
 node dist/cli/index.js targets
-node dist/cli/index.js inspect manifests/code-reviewer.yaml --target dsh
+node dist/cli/index.js inspect manifests/code-reviewer.yaml --target openai-compatible
 node dist/cli/index.js run manifests/code-reviewer.yaml --target mock --approve deny --trace
 
-# รันจริงบน DeepSeek Harness
+# รันจริงบน endpoint จริง
 cp .env.example .env      # ใส่ LLM_GATEWAY_BASE_URL + LLM_GATEWAY_API_KEY
 node --env-file=.env dist/cli/index.js models          # endpoint เสิร์ฟ model อะไรบ้าง
 node --env-file=.env dist/cli/index.js run manifests/researcher.yaml \
-  --target dsh --input "อธิบาย MCP protocol สั้น ๆ"
+  --target openai-compatible --input "อธิบาย MCP protocol สั้น ๆ"
 ```
 
 ### ใช้ opencode zen (หรือ OpenAI-compatible gateway ตัวอื่น)
 
-`dsh` คุยกับ OpenAI-compatible chat completions ล้วน ๆ ดังนั้น gateway ตัวไหนก็ใช้ได้ทันที
+`openai-compatible` คุยกับ chat completions ล้วน ๆ ดังนั้น gateway ตัวไหนก็ใช้ได้ทันที
 โดยไม่ต้องแก้โค้ด — และเส้นทางนี้ก็เป็นเส้นทางที่ B1 อยากให้เดินอยู่แล้ว
 
 ```bash
@@ -69,7 +69,7 @@ LLM_GATEWAY_API_KEY=sk-...
 
 ```bash
 agent-builder models                                    # ถามว่าเสิร์ฟ model อะไร
-agent-builder run manifests/researcher.yaml --target dsh --input "..."
+agent-builder run manifests/researcher.yaml --target openai-compatible --input "..."
 ```
 
 ถ้าอยากให้ manifest เรียกด้วยชื่อ `zen` ตรง ๆ (ไม่ผ่าน gateway) ตั้ง `OPENCODE_ZEN_API_KEY`
@@ -223,14 +223,14 @@ builder/
   audit.ts               audit log แบบ JSON Lines
   registry/              tools · skills · mcp · models · policy · runtimes · capabilities
 runtimes/
-  dsh/adapter.ts         loop แบบ OpenAI-compatible ที่เขียนเอง
+  openai-compatible/     loop ที่เขียนเอง บน endpoint แบบ OpenAI ตัวไหนก็ได้
   pi/adapter.ts          Pi agent harness — Pi เป็นเจ้าของ loop
   acp/adapter.ts         ขับ agent ของคนอื่นผ่าน Agent Client Protocol
   acp/client.ts          JSON-RPC ndjson บน stdio ของ child process
   mock/adapter.ts        runtime จริงที่ไม่ต่อเน็ต ใช้ใน CI
   mcp-client.ts          MCP → ResolvedTool
 cli/index.ts             validate · inspect · build · run · targets
-tests/                   manifest · policy · portability · conformance · dsh-runtime · pi-runtime · acp-runtime · mcp-policy · resilience · capabilities
+tests/                   manifest · policy · portability · conformance · openai-compatible-runtime · pi-runtime · acp-runtime · mcp-policy · resilience · capabilities
   support/acp-stub-agent.mjs  ACP agent จำลอง เก็บ session ลงไฟล์เพื่อทดสอบ resume ข้าม process
   support/openai-stub.ts endpoint ปลอมบน 127.0.0.1 ให้ conformance รันได้ทุก adapter
   fixtures/              manifest ที่มีไว้ทดสอบอย่างเดียว
@@ -254,12 +254,14 @@ tests/                   manifest · policy · portability · conformance · dsh
 |---|---|---|---|
 | 1 | Agent Manifest | ✅ | `manifest.test.ts` — 3 ตัวอย่าง validate ผ่าน |
 | 2 | Validation | ✅ | field แปลกปลอมและ `spec.runtime` ถูก reject |
-| 3 | Capability Registry | ✅ | 6 registry: tool · skill · mcp · model · policy · runtime |
+| 3 | Capability Registry | ✅ | 7 registry: tool · skill · mcp · model · policy · runtime · capability-gap |
 | 4 | Builder / Compiler | ✅ | `CompiledAgent` ไม่มี type ของ vendor |
-| 5 | DSH Runtime | ✅ | `dsh-runtime.test.ts` — agent loop จริงยิงใส่ OpenAI-compatible server บน localhost |
+| 5 | OpenAI-compatible Runtime | ✅ | `openai-compatible-runtime.test.ts` — agent loop จริงยิงใส่ stub บน localhost |
+| 5b | **DSH Runtime ตัวจริง** | ⏳ | ยังไม่ต่อกับ `deepseek-ai/deepseek-harness` — ที่ต่อได้แล้วคือผ่าน `--target acp` (ดู [`spikes/acp/`](spikes/acp/)) |
 | 6 | MCP | ✅ | `mcp-policy.test.ts` — ยิงใส่ MCP server จริงบน localhost · policy คุม MCP tool ได้ |
 | 7 | Sub-agent | ⏳ P5 | schema รับ `spec.subagents` แล้ว ยังไม่ compile |
 | 8 | Issue → PR ⭐ | ⏳ P6 | `code-reviewer.yaml` + `github.*` tools พร้อมแล้ว |
+| 9 | Resume | ✅ | `acp-runtime.test.ts` — resume ข้าม process · พิสูจน์กับ DSH ตัวจริงแล้ว |
 | ★ | **สลับ runtime โดยไม่แก้ Manifest** | ✅ | `portability.test.ts` — build ทุก target แล้ว assert ว่าเท่ากัน |
 
 ---
