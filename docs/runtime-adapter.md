@@ -33,7 +33,9 @@ adapter รับ `CompiledAgent` เท่านั้น จึงไม่ม
 1. `runtimes/<id>/adapter.ts` — implement interface
 2. เพิ่มลง `LOADERS` ใน `builder/registry/runtimes.ts` — **ไฟล์เดียว**
    (validator อ่านรายชื่อจากที่นี่ ไม่มี list ที่สอง)
-3. ถ้ารันได้โดยไม่ต้องมี credential ให้ใส่ชื่อใน `OFFLINE_RUNTIMES` ด้วย CI จะได้รันเทสต์
+3. ใส่ชื่อใน `OFFLINE_RUNTIMES` — conformance ยก endpoint ปลอมบน 127.0.0.1 แล้วชี้
+   `LLM_GATEWAY_BASE_URL` ไปที่นั่นให้เอง ดังนั้น "ต้องใช้ key" ไม่ใช่เหตุผลที่จะข้าม
+   **runtime ที่ไม่อยู่ในลิสต์นี้ คือ runtime ที่ไม่มีใครทดสอบ** และมันหน้าตาเหมือนผ่าน
 4. `npm test` — `conformance.test.ts` และ `portability.test.ts` จะหยิบ runtime ใหม่ไปทดสอบเอง
 
 ## ตัวอย่าง: DSH ทำงานยังไง
@@ -55,10 +57,36 @@ execute → ต่อผลลัพธ์เข้า messages → วนให
 ```
 
 ชื่อ tool มีจุด (`github.read`) แต่ OpenAI function name รับแค่ `[A-Za-z0-9_-]`
-adapter จึงแปลงเป็น `github_read` ตอนส่ง แล้ว map กลับตอนเรียก — manifest ยังอ่านง่ายเหมือนเดิม
+จึงแปลงเป็น `github_read` ตอนส่ง แล้ว map กลับตอนเรียก — manifest ยังอ่านง่ายเหมือนเดิม
+การแปลงอยู่ที่ `builder/tool-names.ts` **ไม่ใช่ในตัว adapter** เพราะ `policy.forbidden`
+กับ `approvalRequired` เขียนด้วยชื่อใน manifest — adapter ที่แปลงคนละแบบจะเลิกตรงกับ policy ของตัวเอง
 
-## ถ้ามี DSH SDK จริงในอนาคต
+## ตัวอย่างที่สอง: Pi — เมื่อ vendor เป็นเจ้าของ loop
 
-ตอนนี้ `dsh` เป็น agent loop ที่เราเขียนเองบน OpenAI-compatible API เพราะยังไม่มี SDK
-วันที่มี SDK จริง **แก้แค่ `runtimes/dsh/adapter.ts` ไฟล์เดียว** manifest, Builder, test ไม่ต้องแตะ
-— ซึ่งก็คือสิ่งที่ PoC นี้ตั้งใจพิสูจน์ตั้งแต่ต้น
+`runtimes/pi/adapter.ts` ต่างจาก `dsh` ตรงที่ **เราไม่ได้เป็นเจ้าของ loop** Pi เป็นคนวน
+สิ่งที่ adapter ยังเป็นเจ้าของเต็ม ๆ คือ **พื้นผิวของ tool** และสัญญาทั้งหมดอยู่ตรงนั้น
+
+| ข้อผูกพัน | ทำที่ไหนใน `dsh` | ทำที่ไหนใน `pi` |
+|---|---|---|
+| ยื่นเฉพาะ `compiled.tools` | สร้าง `tools` array เอง | `noTools: "all"` + allowlist ตอน `createAgentSession` |
+| ขออนุมัติก่อน tool ที่ gated | ก่อน dispatch ใน loop ตัวเอง | ใน `execute` ของ tool ที่ adapter เขียนเอง |
+| model ที่ Builder เลือก | ใส่ใน body ของ request | `registerProvider()` จาก `ModelBinding` |
+
+ข้อสองคือข้อที่คนมักคิดว่าทำไม่ได้ Pi ไม่มี permission system เป็นของตัวเอง — แต่ adapter
+เป็นคนเขียน `execute` ของทุก tool จึงดักก่อน side effect ได้ **การปฏิเสธจึงหมายความว่า
+tool ไม่เคยทำงาน** ไม่ใช่แค่บอก model ว่าไม่ควรทำ
+
+ข้อสามคือจุดที่ predecessor พลาด: มันเรียก catalog ของ pi-ai แล้ว `.catch(() => undefined)`
+ซึ่งแปลว่า manifest ระบุ model ตัวหนึ่งแต่รันด้วยอีกตัวโดยไม่มีใครรู้ adapter นี้ไม่แตะ catalog
+ของ Pi เลย — `ModelBinding` เป็นแหล่งเดียว ไม่มีอะไรให้ fallback ไปหา
+
+## เรื่องชื่อ `dsh`
+
+`dsh` ตอนนี้ **ไม่ได้ต่อกับ DeepSeek Harness** มันคือ agent loop ที่เราเขียนเองบน
+OpenAI-compatible API ซึ่งใช้งานได้ดีและครอบคลุม gateway ทุกตัว แต่ชื่อไม่ตรงของ
+
+DeepSeek Harness ตัวจริงมีอยู่ (`deepseek-ai/deepseek-harness`) และต่อได้ผ่าน ACP —
+ทดสอบแล้วใน [`../spikes/acp/`](../spikes/acp/) ผลและข้อจำกัดอยู่ใน
+[`poc-review-2026-09-02.md` หัวข้อ 9](poc-review-2026-09-02.md)
+
+ข้อเสนอคือแยกเป็น `openai-compatible` / `acp` / `dsh` — เหตุผลอยู่ในหัวข้อ 5.6 ของบันทึกเดียวกัน

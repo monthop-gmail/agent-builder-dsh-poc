@@ -1,0 +1,29 @@
+# Autonomy level 0 makes even a read tool need a human, which is what lets a
+# test exercise the approval gate with a tool that touches nothing outside the
+# process. `current_time` needs no network, no key and no arguments, so an
+# approved call proves the tool really ran rather than proving a stub answered.
+apiVersion: agent/v1alpha2
+kind: Agent
+
+metadata:
+  name: gated-observer
+  version: 0.1.0
+  description: Reads the clock, but only when a human says yes
+
+spec:
+  purpose:
+    primary: report_the_time
+
+  model:
+    preferred:
+      - deepseek
+
+  autonomy:
+    level: 0
+
+  tools:
+    allowed:
+      - current_time
+
+  audit:
+    required: true
