@@ -30,7 +30,7 @@ conformance:
   #                       · bypass_actors: 0 · ห้าม force push · ต้องผ่าน PR
   #                       (รูปแบบเดียวกับ botforge ไม่ใช่ legacy branch protection)
 
-pinned_contracts_commit: 5bb4a390887cf406f5e46aa051c31e5a7fe7c608   # conformance/pinned.yaml
+pinned_contracts_commit: 6cb0b795988d6b0b353929b0f028309b4c0d7838   # conformance/pinned.yaml
 
 # ─────────────────────────────────────────────────────────────────────────────
 # สิ่งที่ **ไม่** pin และเหตุผล
