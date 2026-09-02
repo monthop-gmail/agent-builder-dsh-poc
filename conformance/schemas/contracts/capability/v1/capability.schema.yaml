@@ -1,10 +1,10 @@
 $schema: https://json-schema.org/draft/2020-12/schema
 $id: https://schemas.agent-platform.internal/capability/v1/capability.schema.yaml
 title: Capability Taxonomy
-description: >-
-  รายการ capability ที่ platform รู้จัก พร้อมนิยามและระดับความเสี่ยง (ADR-0009)
-  capability คือ "ทำอะไรได้" — ไม่ใช่ "ใครให้บริการ" (นั่นคือ provider/v1)
-  เพิ่มค่าใหม่ใน enum = ไม่ breaking · ลบหรือเปลี่ยนความหมาย = breaking (ADR-0006)
+# ⚠️ ไฟล์นี้เคยมี `description` สองครั้งที่ระดับบนสุด — PyYAML รับแล้วเก็บอันหลังเงียบ ๆ
+#    ส่วน YAML 1.2 (`yaml` ของ npm) ปฏิเสธด้วย "Map keys must be unique"
+#    ผลคือคำอธิบายระดับไฟล์ไม่เคยถูกอ่านโดย parser ตัวไหนเลย
+#    รวมเป็นอันเดียวที่ root แล้ว (#56) · drift_check จับ key ซ้ำได้ตั้งแต่รอบนี้
 
 $defs:
   CapabilityId:
@@ -68,7 +68,14 @@ $defs:
     enum: [low, medium, high, critical]
 
 type: object
-description: หนึ่งรายการใน catalog
+description: >-
+  **หนึ่งรายการใน catalog** ของ capability ที่ platform รู้จัก พร้อมนิยามและระดับความเสี่ยง
+  ([ADR-0009](../../../decisions/0009-capability-model.md))
+
+  capability คือ **"ทำอะไรได้"** — ไม่ใช่ **"ใครให้บริการ"** (นั่นคือ [`provider/v1`](../../provider/v1/))
+
+  เพิ่มค่าใหม่ใน enum = ไม่ breaking · ลบหรือเปลี่ยนความหมาย = breaking
+  ([ADR-0006](../../../decisions/0006-contract-versioning.md))
 required: [id, scope, action_risk, description]
 properties:
   id:

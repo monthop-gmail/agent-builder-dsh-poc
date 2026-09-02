@@ -15,18 +15,19 @@
 
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
-import { parse as rawParseYaml } from "yaml";
+import { parse as parseYaml } from "yaml";
 
 /**
- * `uniqueKeys: false` because one vendored schema needs it, not because we
- * are relaxed about YAML: `contracts/capability/v1/capability.schema.yaml`
- * declares `description` twice at the top level (lines 4 and 71). PyYAML,
- * which upstream validates with, silently keeps the LAST one — so the
- * taxonomy's own explanation is being discarded by every parser that reads
- * it, and nothing upstream notices. Reported below rather than worked around
- * in silence.
+ * Parsed with YAML 1.2 rules — duplicate keys are an ERROR, not a last-one-wins.
+ *
+ * This used to need `uniqueKeys: false`, because
+ * `contracts/capability/v1/capability.schema.yaml` declared `description`
+ * twice at the top level and PyYAML (which upstream validates with) kept the
+ * last one silently. Reported as #56, fixed upstream in `capability/v1`
+ * v1.1.1, and the loosening is gone with it — a workaround left in place
+ * after its reason is gone is how the NEXT duplicate goes unnoticed, which is
+ * the exact argument the issue made.
  */
-const parseYaml = (text: string): unknown => rawParseYaml(text, { uniqueKeys: false });
 import ajvModule, { type ValidateFunction } from "ajv/dist/2020.js";
 import addFormatsModule from "ajv-formats";
 
@@ -210,23 +211,16 @@ async function main(): Promise<void> {
   const ajv = await buildAjv();
   const ctx = { tenant: "conformance", workspace: "agent-builder" };
 
-  out("\nvendored schemas — parseable by something other than PyYAML");
+  out("\nvendored schemas — parseable under YAML 1.2, not just PyYAML");
   {
+    // `buildAjv()` already parsed every file strictly to get here, so a
+    // duplicate key upstream would have thrown before this line. Saying so
+    // out loud keeps the guarantee visible: the parser IS the check now,
+    // which is stronger than a scan that has to be remembered.
     const pinned = parseYaml(await readFile(resolve(here, "pinned.yaml"), "utf8")) as {
       schemas: string[];
     };
-    for (const rel of pinned.schemas) {
-      const text = await readFile(resolve(here, "schemas", rel), "utf8");
-      const topLevel = [...text.matchAll(/^([A-Za-z$][A-Za-z0-9_$-]*):/gm)].map((m) => m[1]);
-      const dupes = topLevel.filter((k, i) => topLevel.indexOf(k) !== i);
-      if (dupes.length) {
-        // Not fatal for us — we parse with uniqueKeys off — but it means the
-        // first value is silently dropped, which is a fact the owner should
-        // know rather than a thing to route around quietly.
-        out(`  ⚠ ${rel} declares ${[...new Set(dupes)].join(", ")} twice at the top level`);
-      }
-    }
-    pass("every vendored schema parsed");
+    pass(`every vendored schema parsed strictly (${pinned.schemas.length} files)`);
   }
 
   out("\ncapability/v1 — the taxonomy we name");
