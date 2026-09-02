@@ -34,10 +34,40 @@ import { AcpClient, type AgentRequest } from "./client.js";
  * worse than not supporting the target at all.
  */
 
-/** Where to find the agent. Absent means this target cannot be used. */
-interface AgentLaunch {
+/** Where to find the agent, and anything that had to be written first. */
+export interface AgentLaunch {
   command: string;
   args: string[];
+  env?: NodeJS.ProcessEnv;
+  /** Called on dispose, after the client is closed. */
+  cleanup?(): Promise<void>;
+}
+
+/**
+ * How a target decides what to launch.
+ *
+ * `acp` reads it from the environment: the agent is somebody else's, already
+ * installed, and nothing here configures it. A target that composes its
+ * agent — `dsh` writes a Cordis patch first — supplies its own launcher and
+ * inherits every line of protocol handling below.
+ */
+export interface AcpLauncher {
+  prepare(compiled: CompiledAgent): Promise<AgentLaunch>;
+}
+
+/** The default: name the agent in the environment, configure nothing. */
+export class EnvLauncher implements AcpLauncher {
+  async prepare(): Promise<AgentLaunch> {
+    const command = process.env.ACP_AGENT_COMMAND;
+    if (!command) {
+      throw new Error(
+        "acp: ACP_AGENT_COMMAND is not set — name the ACP agent to launch, " +
+          'e.g. ACP_AGENT_COMMAND=dsh ACP_AGENT_ARGS="--profile acp"',
+      );
+    }
+    const raw = process.env.ACP_AGENT_ARGS ?? "";
+    return { command, args: raw.split(" ").filter(Boolean) };
+  }
 }
 
 interface AcpHandle extends AgentHandle {
@@ -45,6 +75,8 @@ interface AcpHandle extends AgentHandle {
   client: AcpClient;
   /** Set for the duration of run(); the permission handler reads it. */
   active: RunState | undefined;
+  /** Whatever the launcher wrote and now has to remove. */
+  cleanup?(): Promise<void>;
 }
 
 interface RunState {
@@ -55,7 +87,9 @@ interface RunState {
 }
 
 export class AcpRuntime implements AgentRuntime {
-  readonly id = "acp";
+  readonly id: string = "acp";
+
+  constructor(protected readonly launcher: AcpLauncher = new EnvLauncher()) {}
 
   unsupported(compiled: CompiledAgent): string[] {
     const gaps: string[] = [];
@@ -65,7 +99,7 @@ export class AcpRuntime implements AgentRuntime {
   }
 
   async createAgent(compiled: CompiledAgent): Promise<AgentHandle> {
-    const handle = await this.#connect(compiled);
+    const handle = await this.connect(compiled);
     const session = (await handle.client.call("session/new", {
       cwd: process.cwd(),
       mcpServers: compiled.mcpServers.map(toAcpMcpServer),
@@ -75,11 +109,11 @@ export class AcpRuntime implements AgentRuntime {
       await handle.client.close();
       throw new Error("acp: session/new returned no sessionId");
     }
-    return withSession(handle, session.sessionId);
+    return withSession(handle, this.id, session.sessionId);
   }
 
   async resume(compiled: CompiledAgent, sessionId: string): Promise<AgentHandle> {
-    const handle = await this.#connect(compiled);
+    const handle = await this.connect(compiled);
     try {
       // Policy travels with the CompiledAgent, so a resumed session is gated
       // by the manifest as it reads today — not as it read when the session
@@ -89,7 +123,7 @@ export class AcpRuntime implements AgentRuntime {
       await handle.client.close();
       throw error;
     }
-    return withSession(handle, sessionId);
+    return withSession(handle, this.id, sessionId);
   }
 
   async run(agent: AgentHandle, input: string, ctx: RunContext): Promise<AgentResult> {
@@ -131,8 +165,8 @@ export class AcpRuntime implements AgentRuntime {
     }
   }
 
-  async #connect(compiled: CompiledAgent): Promise<AcpHandle> {
-    const launch = readLaunch();
+  protected async connect(compiled: CompiledAgent): Promise<AcpHandle> {
+    const launch = await this.launcher.prepare(compiled);
     // The handle is built before the client so the callbacks can reach it;
     // `active` is what makes a permission request find the current run.
     const handle = { compiled, active: undefined } as AcpHandle;
@@ -141,7 +175,7 @@ export class AcpRuntime implements AgentRuntime {
       command: launch.command,
       args: launch.args,
       cwd: process.cwd(),
-      env: process.env,
+      env: launch.env ?? process.env,
       onNotification: (method, params) => onNotification(handle, method, params),
       onRequest: (request) => onRequest(handle, request),
     });
@@ -154,37 +188,26 @@ export class AcpRuntime implements AgentRuntime {
       });
     } catch (error) {
       await client.close();
+      await launch.cleanup?.();
       throw error;
     }
+    handle.cleanup = launch.cleanup;
     return handle;
   }
 }
 
-function withSession(handle: AcpHandle, sessionId: string): AcpHandle {
-  const complete: AcpHandle = Object.assign(handle, {
-    runtimeId: "acp",
+function withSession(handle: AcpHandle, runtimeId: string, sessionId: string): AcpHandle {
+  return Object.assign(handle, {
+    runtimeId,
     sessionId,
     dispose: async () => {
       // Closing the session leaves it resumable; closing the client does not
       // delete it. That is the whole point of this target.
       await handle.client.call("session/close", { sessionId }).catch(() => undefined);
       await handle.client.close();
+      await handle.cleanup?.();
     },
   });
-  return complete;
-}
-
-/** Read the agent to launch. Kept in the environment, never in a manifest. */
-function readLaunch(): AgentLaunch {
-  const command = process.env.ACP_AGENT_COMMAND;
-  if (!command) {
-    throw new Error(
-      "acp: ACP_AGENT_COMMAND is not set — name the ACP agent to launch, " +
-        'e.g. ACP_AGENT_COMMAND=dsh ACP_AGENT_ARGS="--profile acp"',
-    );
-  }
-  const raw = process.env.ACP_AGENT_ARGS ?? "";
-  return { command, args: raw.split(" ").filter(Boolean) };
 }
 
 /** Manifest MCP descriptor -> the ACP wire shape. */

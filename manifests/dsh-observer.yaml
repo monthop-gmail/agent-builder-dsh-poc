@@ -1,0 +1,36 @@
+# What a manifest looks like when the target is a harness that owns its own
+# tools. It grants nothing locally and forbids nothing by name, because
+# neither survives the boundary — see `--target dsh` in the README.
+#
+# What it does control is the tool set the harness composes: at autonomy 1 the
+# generated patch withholds the shell, so this agent does not have one.
+#
+#   DSH_COMMAND=./node_modules/.bin/dsh \
+#   agent-builder run manifests/dsh-observer.yaml --target dsh
+
+apiVersion: agent/v1alpha2
+kind: Agent
+
+metadata:
+  name: dsh-observer
+  version: 0.1.0
+  description: Reads a workspace and reports on it, with no way to change it
+
+spec:
+  purpose:
+    primary: report_on_the_workspace
+
+  model:
+    preferred:
+      - zen
+      - deepseek
+
+  autonomy:
+    level: 1
+
+  system:
+    instructions: |
+      You report on what you find. State plainly when something is unverified.
+
+  audit:
+    required: true
