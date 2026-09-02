@@ -1,0 +1,22 @@
+apiVersion: agent/v1alpha2
+kind: Agent
+metadata:
+  name: compat-policy
+  version: 1.0.0
+  description: Uses every governance field a manifest has
+spec:
+  purpose:
+    primary: review_a_change
+  model:
+    preferred: [deepseek]
+  autonomy:
+    level: 2
+  skills: [code-review]
+  tools:
+    allowed: [github.read, github.comment, github.merge]
+  policy:
+    forbidden: [github.merge]
+  humanApproval:
+    required: [github.comment]
+  audit:
+    required: true

@@ -14,6 +14,11 @@
 | `runtime-contract.md` | [`runtime-adapter.md`](runtime-adapter.md) | interface + กติกาที่ adapter ต้องรักษา |
 | `capability-matrix.md` | [`capability-matrix.md`](capability-matrix.md) | **generate จากโค้ด** |
 
+## กติกาความนิ่งของ contract
+
+[`contract-stability.md`](contract-stability.md) — อะไร freeze แล้ว อะไรนับเป็น breaking
+และบังคับด้วย `tests/compatibility/` กับ `tests/contract-stability.test.ts`
+
 ## ที่เหลือ
 
 | ไฟล์ | |
@@ -29,6 +34,7 @@
 ```
 capability-matrix.md         ← npm run docs:capabilities   · capability-matrix.test.ts
 compiled-agent-contract.md   ← ตารางฟิลด์                   · compiled-agent-contract.test.ts
+contract-stability.md        ← baseline.json                · contract-stability.test.ts
 ```
 
 ที่ทำแบบนี้เพราะ README ของ repo นี้เขียนว่า `npm test ผ่าน 45 test` ค้างมา **9 merge**

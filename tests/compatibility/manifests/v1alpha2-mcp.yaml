@@ -1,0 +1,19 @@
+apiVersion: agent/v1alpha2
+kind: Agent
+metadata:
+  name: compat-mcp
+  version: 1.0.0
+  description: Reaches capability through an MCP server
+spec:
+  purpose:
+    primary: work_with_files
+  model:
+    preferred: [deepseek]
+  autonomy:
+    level: 2
+  tools:
+    allowed: [current_time]
+  mcp:
+    servers: [filesystem]
+  audit:
+    required: true
