@@ -81,7 +81,7 @@ agent-builder run manifests/researcher.yaml --target dsh --input "..."
 | `validate <manifest>` | ตรวจกับ contract + registry |
 | `inspect <manifest> [--target]` | โชว์ว่า Builder resolve อะไรให้ และ policy หักอะไรออก |
 | `build <manifest> --target <id>` | ออกเป็น `.agentpkg.json` |
-| `run <manifest> --target <id>` | compile แล้วรัน |
+| `run <manifest> --target <id>` | compile แล้วรัน (`--audit-log <f>` เก็บ trace ลงไฟล์) |
 | `targets` | รายชื่อ target + ตาราง autonomy level |
 | `models [--provider <n>]` | catalog ในเครื่อง + ถาม endpoint จริงว่าเสิร์ฟ model อะไร |
 
@@ -123,6 +123,29 @@ tool ที่ถูก forbid **ไม่เคยเดินทางไป�
 adapter ที่อ่าน manifest ได้ จะค่อย ๆ งอกพฤติกรรมเฉพาะ manifest แล้ว portability ตายเงียบ ๆ
 ถ้า adapter ทำอะไรไม่ได้ ให้บอกผ่าน `unsupported(compiled)` แทน
 
+### run ที่ล้มเหลว ห้ามโกหกว่าไม่มีอะไรเกิดขึ้น
+
+free tier ตอบ 429/502/503 เป็นเรื่องปกติ — ทดสอบจริงกับ opencode zen เจอ 5 ครั้งใน 8 รอบ
+ปัญหาไม่ใช่ความไม่เสถียร แต่คือ **รูปแบบความล้มเหลว**: รอบหนึ่ง agent โพสต์ข้อความลงโต๊ะประชุมสำเร็จ
+แล้ว step ถัดไปตาย 502 ข้อความอยู่บนกระดานจริง แต่ CLI พิมพ์ว่า `run failed`
+
+สามอย่างที่แก้:
+
+```
+429 / 5xx / เน็ตพัง   → backoff แล้วลองใหม่ (retry.ts)
+ยังไม่ได้              → ไล่ไป model ถัดไปใน spec.model.preferred
+ยังไม่ได้อีก            → RunAborted พา trace มาด้วย แล้ว CLI ลิสต์ tool ที่ทำงานไปแล้ว
+```
+
+`400`/`401` ไม่ retry — มันแปลว่า "ไม่ใช่แบบนี้" ไม่ใช่ "ไม่ใช่ตอนนี้" ลองซ้ำมีแต่เปลืองโควตา
+
+### audit ต้องมีที่เก็บ ไม่ใช่แค่ field
+
+`spec.audit.required: true` เคยแค่เปิด callback ในหน่วยความจำ ถ้าไม่ส่ง `--trace` ก็ไม่เหลืออะไร
+ตอนนี้ `--audit-log <file>` เขียน JSON Lines: บรรทัดแรกบอกว่ารันอะไร (`runId`, `manifestChecksum`,
+model, autonomy) แล้วตามด้วย event ละบรรทัด และถ้า manifest ขอ audit แต่ไม่มีที่เก็บ **CLI เตือน**
+แทนที่จะเงียบ
+
 ### MCP tool คือ tool ธรรมดา
 
 tool จาก MCP server ถูกแปลงเป็น `ResolvedTool` ตัวเดียวกับ tool ในเครื่อง
@@ -152,6 +175,9 @@ builder/
   compiler.ts            Manifest → CompiledAgent
   packager.ts            CompiledAgent → .agentpkg.json
   tool-names.ts          ชื่อ tool → ชื่อบน wire (ใช้ร่วมกันทุก adapter)
+  retry.ts               นโยบาย backoff — 429/5xx รอแล้วลองใหม่
+  errors.ts              RunAborted — พา side effect ที่ลงไปแล้วติดมากับ error
+  audit.ts               audit log แบบ JSON Lines
   registry/              tools · skills · mcp · models · policy · runtimes
 runtimes/
   dsh/adapter.ts         loop แบบ OpenAI-compatible ที่เขียนเอง
@@ -159,7 +185,7 @@ runtimes/
   mock/adapter.ts        runtime จริงที่ไม่ต่อเน็ต ใช้ใน CI
   mcp-client.ts          MCP → ResolvedTool
 cli/index.ts             validate · inspect · build · run · targets
-tests/                   manifest · policy · portability · conformance · dsh-runtime · pi-runtime · mcp-policy
+tests/                   manifest · policy · portability · conformance · dsh-runtime · pi-runtime · mcp-policy · resilience
   support/openai-stub.ts endpoint ปลอมบน 127.0.0.1 ให้ conformance รันได้ทุก adapter
   fixtures/              manifest ที่มีไว้ทดสอบอย่างเดียว
 ```
