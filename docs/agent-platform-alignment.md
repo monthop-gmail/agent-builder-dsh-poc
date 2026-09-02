@@ -153,5 +153,6 @@ ADR-0006 บังคับ consumer สามข้อ:
 (`agent` `provider` `model` `tool` `mcp` = *ยังไม่มีใคร pin*) เราจะเป็นรายแรก
 และรายแรกเป็นคนที่ตั้งบรรทัดฐานให้คนหลัง
 
-**สถานะ (2026-09-02):** ร่าง issue ทั้งสองใบเขียนแล้วที่ [`proposals/`](../proposals/)
-— **ยังไม่เปิด** รอตรวจ wording ตาม [รีวิวรอบ 4](../ref/2026-09-02-review-04-open-issues-before-pinning.md)
+**สถานะ (2026-09-02):** เปิดแล้วทั้งสองใบ — [`agent-platform#46`](https://github.com/monthop-gmail/agent-platform/issues/46) (binding ของ model เกิดตอนไหน) ·
+[`agent-platform#47`](https://github.com/monthop-gmail/agent-platform/issues/47) (ฝ่าย agent ไม่มี field ให้เขียนข้อจำกัดของตัวเอง)
+สิ่งที่ส่งไปตามตัวอักษรอยู่ที่ [`proposals/`](../proposals/) · **รอ decision ก่อนแตะ manifest**

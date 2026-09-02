@@ -2,7 +2,7 @@
 
 **Template:** `contract-change.yml`
 **Title:** `contract: agent/v1 — กฎ "สามฝ่ายตกลงตรงกัน" ให้ที่อยู่กับฝ่าย agent แค่ครึ่งเดียว`
-**สถานะ:** 📝 ร่าง ยังไม่เปิด
+**สถานะ:** ✅ **เปิดแล้ว 2026-09-02** → [`agent-platform#47`](https://github.com/monthop-gmail/agent-platform/issues/47) — รอ decision
 
 > **แก้จากร่างแรก** — ร่างแรกเสนอ *"effective policy = ผลที่เข้มกว่า"* ราวกับเป็นเรื่องใหม่
 > ความจริงคือ **`agent-platform` เขียนกฎนี้ไว้แล้ว** ใน `contracts/profile/v1/profile.schema.yaml`
