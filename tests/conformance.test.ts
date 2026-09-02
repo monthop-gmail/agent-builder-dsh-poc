@@ -1,5 +1,7 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { resolve } from "node:path";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
 import { loadManifest } from "../builder/loader.js";
 import { validateManifest, type AgentManifest } from "../builder/validator.js";
 import { compileManifest } from "../builder/compiler.js";
@@ -20,20 +22,40 @@ import type { ApprovalRequest, TraceEvent } from "../builder/types.js";
  */
 
 let stub: OpenAiStub;
+let acpDir: string;
 
 beforeAll(async () => {
   stub = await startOpenAiStub();
   process.env.LLM_GATEWAY_BASE_URL = stub.baseUrl;
   process.env.LLM_GATEWAY_API_KEY = "stub-key";
+
+  // `acp` drives someone else's agent, so its stand-in is a process rather
+  // than an endpoint. Same principle: give the adapter a local peer instead
+  // of skipping it.
+  acpDir = await mkdtemp(join(tmpdir(), "agent-builder-conformance-acp-"));
+  process.env.ACP_AGENT_COMMAND = process.execPath;
+  process.env.ACP_AGENT_ARGS = resolve(import.meta.dirname, "support/acp-stub-agent.mjs");
+  process.env.ACP_STUB_STATE = join(acpDir, "sessions.json");
 });
 
 afterAll(async () => {
-  delete process.env.LLM_GATEWAY_BASE_URL;
-  delete process.env.LLM_GATEWAY_API_KEY;
+  for (const key of [
+    "LLM_GATEWAY_BASE_URL",
+    "LLM_GATEWAY_API_KEY",
+    "ACP_AGENT_COMMAND",
+    "ACP_AGENT_ARGS",
+    "ACP_STUB_STATE",
+  ]) {
+    delete process.env[key];
+  }
   await stub.close();
+  await rm(acpDir, { recursive: true, force: true });
 });
 
 beforeEach(() => stub.reset());
+afterEach(() => {
+  delete process.env.ACP_STUB_TOOL;
+});
 
 const fixture = (name: string) => resolve(import.meta.dirname, "../manifests", name);
 
@@ -83,17 +105,19 @@ describe.each(listRuntimeIds())("Runtime conformance — %s", (id) => {
 
   maybe("asks for approval before a gated tool, and honours a denial", async () => {
     const agent = await compiled("code-reviewer.yaml");
+    // Every adapter only reaches the gate when its peer asks for the tool, so
+    // both stand-ins are told to ask before anything is started. The ACP stub
+    // reads this at spawn time, which is inside createAgent — hence before.
+    stub.callQueue = [
+      { tool: "github_comment", arguments: { repo: "acme/widgets", number: 1, body: "looks fine" } },
+    ];
+    process.env.ACP_STUB_TOOL = "github.comment";
+
     const runtime = await getRuntime(id);
     const handle = await runtime.createAgent(agent);
     const seen: ApprovalRequest[] = [];
     const trace: TraceEvent[] = [];
     try {
-      // Adapters that drive a real model only reach the gate when the model
-      // asks for the tool, so the stub asks. Arguments must satisfy the
-      // tool's schema: Pi validates them before the adapter is reached.
-      stub.callQueue = [
-        { tool: "github_comment", arguments: { repo: "acme/widgets", number: 1, body: "looks fine" } },
-      ];
       await runtime.run(handle, "review it", ctx("deny", seen, trace));
       expect(seen.map((r) => r.tool)).toContain("github.comment");
     } finally {

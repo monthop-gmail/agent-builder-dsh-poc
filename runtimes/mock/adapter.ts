@@ -78,7 +78,10 @@ export class MockRuntime implements AgentRuntime {
     return { output: lines.join("\n"), sessionId: agent.sessionId, trace, toolCalls };
   }
 
-  async resume(sessionId: string): Promise<AgentHandle> {
-    throw new Error(`MockRuntime.resume('${sessionId}') is not implemented (planned P5)`);
+  async resume(_compiled: CompiledAgent, sessionId: string): Promise<AgentHandle> {
+    throw new Error(
+      `MockRuntime.resume('${sessionId}'): this runtime keeps no session across processes. ` +
+        `Use --target acp for a runtime that does.`,
+    );
   }
 }

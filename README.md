@@ -14,7 +14,7 @@
         └───────┬───────┘
                 │  CompiledAgent  (runtime-neutral)
                 ▼
-         Runtime Adapter               ← --target dsh | pi | mock
+         Runtime Adapter               ← --target dsh | pi | acp | mock
                 │
                 ▼
       DeepSeek Harness Runtime
@@ -81,7 +81,7 @@ agent-builder run manifests/researcher.yaml --target dsh --input "..."
 | `validate <manifest>` | ตรวจกับ contract + registry |
 | `inspect <manifest> [--target]` | โชว์ว่า Builder resolve อะไรให้ และ policy หักอะไรออก |
 | `build <manifest> --target <id>` | ออกเป็น `.agentpkg.json` |
-| `run <manifest> --target <id>` | compile แล้วรัน (`--audit-log <f>` เก็บ trace ลงไฟล์) |
+| `run <manifest> --target <id>` | compile แล้วรัน (`--audit-log <f>` เก็บ trace · `--resume <id>` ต่อ session เดิม) |
 | `targets` | รายชื่อ target + ตาราง autonomy level |
 | `models [--provider <n>]` | catalog ในเครื่อง + ถาม endpoint จริงว่าเสิร์ฟ model อะไร |
 
@@ -122,6 +122,36 @@ tool ที่ถูก forbid **ไม่เคยเดินทางไป�
 `AgentRuntime` รับ `CompiledAgent` เท่านั้น — ไม่มี `validate(manifest)` และไม่มี `compile(manifest)`
 adapter ที่อ่าน manifest ได้ จะค่อย ๆ งอกพฤติกรรมเฉพาะ manifest แล้ว portability ตายเงียบ ๆ
 ถ้า adapter ทำอะไรไม่ได้ ให้บอกผ่าน `unsupported(compiled)` แทน
+
+### `acp` — ขับ agent ของคนอื่น และบอกตรง ๆ ว่าคุมอะไรไม่ได้
+
+`--target acp` ไม่ได้รัน agent เอง แต่เป็น **client** ของ agent ที่พูด
+[Agent Client Protocol](https://agentclientprotocol.com) — DeepSeek Harness เป็นตัวแรกที่ทดสอบ
+
+```bash
+ACP_AGENT_COMMAND=dsh ACP_AGENT_ARGS="--profile acp" \
+  agent-builder run manifests/researcher.yaml --target acp
+
+# ต่อ session เดิม โดย policy มาจาก manifest วันนี้ ไม่ใช่วันที่ session เริ่ม
+agent-builder run manifests/researcher.yaml --target acp --resume <sessionId>
+```
+
+สิ่งที่ได้คือ **`resume()`** ซึ่ง runtime อื่นทำไม่ได้ — session อยู่ฝั่ง agent จึงข้าม process ได้
+
+สิ่งที่เสียคือของที่ต้องประกาศ ไม่ใช่ของที่ควรเงียบ:
+
+```
+$ inspect manifests/code-reviewer.yaml --target acp
+  ⚠ target 'acp' does not support: tools.local, policy.forbidden
+```
+
+- **`tools.local`** — ACP ส่งความสามารถผ่าน MCP server เท่านั้น ไม่มีช่องทางให้ client
+  ยื่น tool ของตัวเองเข้าไป manifest ที่ grant `web_search` จะได้ agent ที่ไม่มี `web_search`
+- **`policy.forbidden`** — `session/new` ยื่น MCP server ทั้งตัว ไม่ใช่ subset ที่เลือกไว้
+  และ agent ยังมี built-in ของมันเองอยู่แล้ว วัดจริงกับ DSH: session ที่ mount MCP หนึ่งตัว
+  มี tool 40 ตัว รวม shell และทุกตัวที่ manifest สั่งห้าม
+
+adapter ที่เงียบเรื่องนี้จะทำให้ manifest **ดูเหมือนถูกบังคับใช้ทั้งที่ไม่ได้** ซึ่งแย่กว่าไม่รองรับเลย
 
 ### run ที่ล้มเหลว ห้ามโกหกว่าไม่มีอะไรเกิดขึ้น
 
@@ -182,10 +212,13 @@ builder/
 runtimes/
   dsh/adapter.ts         loop แบบ OpenAI-compatible ที่เขียนเอง
   pi/adapter.ts          Pi agent harness — Pi เป็นเจ้าของ loop
+  acp/adapter.ts         ขับ agent ของคนอื่นผ่าน Agent Client Protocol
+  acp/client.ts          JSON-RPC ndjson บน stdio ของ child process
   mock/adapter.ts        runtime จริงที่ไม่ต่อเน็ต ใช้ใน CI
   mcp-client.ts          MCP → ResolvedTool
 cli/index.ts             validate · inspect · build · run · targets
-tests/                   manifest · policy · portability · conformance · dsh-runtime · pi-runtime · mcp-policy · resilience
+tests/                   manifest · policy · portability · conformance · dsh-runtime · pi-runtime · acp-runtime · mcp-policy · resilience
+  support/acp-stub-agent.mjs  ACP agent จำลอง เก็บ session ลงไฟล์เพื่อทดสอบ resume ข้าม process
   support/openai-stub.ts endpoint ปลอมบน 127.0.0.1 ให้ conformance รันได้ทุก adapter
   fixtures/              manifest ที่มีไว้ทดสอบอย่างเดียว
 ```

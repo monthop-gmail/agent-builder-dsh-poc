@@ -10,7 +10,7 @@ interface AgentRuntime {
   unsupported(compiled: CompiledAgent): string[];
   createAgent(compiled: CompiledAgent): Promise<AgentHandle>;
   run(agent: AgentHandle, input: string, ctx: RunContext): Promise<AgentResult>;
-  resume(sessionId: string): Promise<AgentHandle>;
+  resume(compiled: CompiledAgent, sessionId: string): Promise<AgentHandle>;
 }
 ```
 
@@ -79,6 +79,33 @@ tool ไม่เคยทำงาน** ไม่ใช่แค่บอก mo
 ข้อสามคือจุดที่ predecessor พลาด: มันเรียก catalog ของ pi-ai แล้ว `.catch(() => undefined)`
 ซึ่งแปลว่า manifest ระบุ model ตัวหนึ่งแต่รันด้วยอีกตัวโดยไม่มีใครรู้ adapter นี้ไม่แตะ catalog
 ของ Pi เลย — `ModelBinding` เป็นแหล่งเดียว ไม่มีอะไรให้ fallback ไปหา
+
+## ตัวอย่างที่สาม: ACP — เมื่อ agent เป็นของคนอื่นทั้งตัว
+
+`runtimes/acp/adapter.ts` ไม่ได้รัน agent แต่เป็น client ของ agent ที่พูด Agent Client Protocol
+adapter จึงไม่ได้เป็นเจ้าของทั้ง loop และ **พื้นผิว tool** — ต่างจาก `pi` ตรงนี้
+
+| | `dsh` | `pi` | `acp` |
+|---|---|---|---|
+| เจ้าของ loop | เรา | vendor | vendor |
+| เจ้าของพื้นผิว tool | เรา | **เรา** | vendor |
+| บังคับ `tools.allowed` | ✅ | ✅ | ❌ |
+| บังคับ `policy.forbidden` | ✅ | ✅ | ❌ |
+| บังคับ `humanApproval` | ✅ | ✅ | ✅ (ผ่าน `session/request_permission`) |
+| `resume()` | ❌ | ❌ | ✅ |
+
+เส้นแบ่งจริงคือ **ใครเป็นเจ้าของพื้นผิว tool** ไม่ใช่ใครเป็นเจ้าของ loop
+`pi` บังคับ policy ได้ทั้งที่ Pi ไม่มี permission system เพราะ adapter เขียน `execute` เอง
+`acp` บังคับไม่ได้เพราะ tool มาจาก agent ปลายทาง adapter ไม่มีอะไรให้ห่อ
+
+สิ่งที่ทำได้คือ **ประกาศ** ผ่าน `unsupported()` — `tools.local` และ `policy.forbidden`
+adapter ที่เงียบจะทำให้ manifest ดูเหมือนถูกบังคับใช้ทั้งที่ไม่ได้
+
+### ทำไม `resume()` ต้องรับ CompiledAgent
+
+session id ไม่ได้พก policy มาด้วย ถ้า resume จาก id อย่างเดียว handle ที่ได้จะมี approval rule
+มาจากที่ที่ runtime บังเอิญเก็บไว้ ซึ่งเป็นสิ่งที่ Builder ตั้งใจเป็นเจ้าของตั้งแต่ต้น
+signature จึงเป็น `resume(compiled, sessionId)` — manifest ถูก compile ใหม่และบังคับใหม่ทุกครั้ง
 
 ## เรื่องชื่อ `dsh`
 

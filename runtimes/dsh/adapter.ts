@@ -244,8 +244,11 @@ export class DshRuntime implements AgentRuntime {
     return abort(`agent did not finish within ${MAX_STEPS} steps`);
   }
 
-  async resume(sessionId: string): Promise<AgentHandle> {
-    throw new Error(`DshRuntime.resume('${sessionId}') is not implemented (planned P5)`);
+  async resume(_compiled: CompiledAgent, sessionId: string): Promise<AgentHandle> {
+    throw new Error(
+      `DshRuntime.resume('${sessionId}'): this runtime keeps no session across processes. ` +
+        `Use --target acp for a runtime that does.`,
+    );
   }
 }
 
