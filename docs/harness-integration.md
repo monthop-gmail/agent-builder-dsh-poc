@@ -29,7 +29,7 @@ DeepSeek   Gemini   Claude   agent อื่น    (ตัวที่ยัง�
 | **Kimi Code CLI** | `acp` | `kimi acp` | ⚪ อ่านจาก [`docs/en/reference/kimi-acp.md`](https://github.com/MoonshotAI/kimi-code/blob/main/docs/en/reference/kimi-acp.md) — ประกาศว่า implement core 3/3 · session 11/11 |
 | **OpenAI Codex** | ยังไม่มีทางตรง | — | ⚪ ไม่พูด ACP · DSH ห่อมันเป็น subagent (`dsh-subagent-codex`) |
 | **Qwen Code** | ⚠️ **ยังไม่ได้** | `qwen serve` = ACP บน **HTTP+SSE** | ⚪ client ของเรารองรับแค่ **stdio** |
-| **Antigravity CLI** (Google) | ⚠️ **ต้องเขียน adapter** | `agy -p --output-format stream-json` | ⚪ **ไม่พูด ACP** — มี headless NDJSON ของตัวเอง ดูข้างล่าง |
+| **Antigravity CLI** (Google) | ⚠️ **ต้องเขียน adapter** | `agy -p --output-format stream-json` | 🟡 **ไม่พูด ACP** · headless รันจบวงแล้ว · แต่ approval กับ workspace ทำงานไม่ตรงกับที่ manifest คาด — ดูข้างล่าง |
 
 > เทียบกับรายชื่อ [best AI coding agent](https://www.kimi.ai/resources/best-ai-coding-agent):
 > ในนั้นมี CLI จริง 5 ตัว — Claude Code · Codex · Gemini CLI · Kimi Code · opencode
@@ -176,7 +176,59 @@ CompiledAgent
 ตามกติกาข้อ 13 → **manifest ที่มี `policy.forbidden` หรือ `humanApproval` จะถูกปฏิเสธ**
 เหลือใช้ได้เฉพาะ manifest ทรงเดียวกับ vector `minimal`
 
-### ติดตั้งแล้ว แต่รันไม่ได้ — และเหตุผลชัดเจน
+### รันได้แล้ว — และผลเปลี่ยนข้อสรุปสองข้อ
+
+หลัง login ด้วยบัญชี Google (ต้องทำบนเครื่องที่มี TTY) headless รันจบวงได้จริง:
+
+```
+$ agy -p "Reply with exactly: AGY-OK" --output-format stream-json
+{"event":"init",  "conversation_id":"5e336d28-…","init":{"cwd":"/tmp","tools":[…57 ตัว…],
+                                                          "permission_mode":"request-review"}}
+{"event":"step_update","step_update":{"step_index":0,"state":"DONE","step_type":"user_input"}}
+{"event":"step_update","step_update":{"step_index":1,"state":"DONE","step_type":"agent_response",…}}
+{"event":"result","result":{"status":"SUCCESS","response":"AGY-OK\n","duration_seconds":2.23,
+                            "usage":{"input_tokens":13905,"output_tokens":45,…}}}
+```
+
+โครง NDJSON แมปกับ `AgentRuntime` ได้ตรงตัว — `init` → createAgent · `step_update` →
+`tool_call`/`tool_result` trace · `result` → `AgentResult` พร้อม usage
+
+**tool 57 ตัว** รวม `call_mcp_tool` · `invoke_subagent` · `define_subagent` ·
+browser automation ~20 ตัว · `generate_image` — pattern เดียวกับ DSH เป๊ะ คือ agent มาพร้อม
+tool ของตัวเองเต็มชุด รวม subagent ที่หลุดจาก tool set ที่ manifest กำหนด
+
+#### 1. `request-review` ไม่ได้ gate อะไรเลยใน headless
+
+สั่งให้เขียนไฟล์ **โดยไม่ใส่** `--dangerously-skip-permissions`:
+
+```
+step 2 DONE  tool list_dir
+step 4 DONE  tool write_to_file      ← ไม่มี ask_permission ไม่มีการรอ
+step 6 DONE  tool view_file
+result       status: SUCCESS
+```
+
+`init` บอกว่า `permission_mode: "request-review"` แต่ `write_to_file` **ทำงานทันที
+ไม่มี step ไหนขออนุมัติ และไม่มีอะไรให้ client ตอบ**
+
+→ **`policy.humanApproval` เป็น ⛔ blocking จริง ยืนยันด้วยการรัน ไม่ใช่การอ่านเอกสาร**
+ไม่ใช่แค่ "ไม่มีทางส่งคำถามออกมา" แต่ **ไม่มีคำถามให้ส่งตั้งแต่แรก**
+
+#### 2. ไฟล์ไปโผล่คนละที่กับที่สั่ง โดยไม่บอก
+
+```
+cwd ที่ส่งไป : /tmp/agy-perm          → ว่างเปล่า
+ไฟล์จริงอยู่ : ~/.gemini/antigravity-cli/scratch/perm-test.txt
+คำตอบที่ได้  : "Created perm-test.txt"   พร้อม file:// link ไปที่ path ที่ไม่ได้ขอ
+```
+
+มันกันไม่ให้เขียนนอก workspace จริง — แต่ **กันด้วยการเปลี่ยนที่เขียนเงียบ ๆ ไม่ใช่การปฏิเสธ**
+
+สำหรับ caller ที่ต้องรู้ว่า agent ทำอะไรลงไป อันนี้แย่กว่าการถูกปฏิเสธ เพราะ
+`result.status` เป็น `SUCCESS` และ side effect เกิดขึ้นจริง แค่ไม่ใช่ที่ที่คิด —
+เป็นรูปแบบเดียวกับปัญหาที่ §3.1 แก้ไป (รายงานไม่ตรงกับสิ่งที่เกิดขึ้นจริง)
+
+### ก่อนหน้านี้ติดตรงไหน
 
 ติดตั้งสำเร็จ (`agy 1.1.24`) แต่ **auth ด้วย API key ไม่ได้** — ยืนยันด้วยการรัน ไม่ใช่การเดา:
 
