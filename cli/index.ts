@@ -4,6 +4,7 @@ import { loadManifest } from "../builder/loader.js";
 import { validateManifest, type AgentManifest } from "../builder/validator.js";
 import { compileManifest, type CompileResult } from "../builder/compiler.js";
 import { openAuditLog } from "../builder/audit.js";
+import { classifyGaps, refusesRun, type GapReport } from "../builder/registry/capabilities.js";
 import { RunAborted, executedTools } from "../builder/errors.js";
 import { packageAgent, writePackage } from "../builder/packager.js";
 import { getRuntime, listRuntimeIds } from "../builder/registry/runtimes.js";
@@ -84,7 +85,12 @@ function flagString(args: Args, key: string): string | undefined {
 const out = (s: string) => process.stdout.write(s);
 const err = (s: string) => process.stderr.write(s);
 
-async function loadAndCompile(path: string, target: string): Promise<CompileResult> {
+interface Prepared {
+  compiled: CompileResult;
+  gaps: GapReport;
+}
+
+async function loadAndCompile(path: string, target: string): Promise<Prepared> {
   const loaded = await loadManifest(resolve(path));
   const result = validateManifest(loaded.value);
 
@@ -106,10 +112,15 @@ async function loadAndCompile(path: string, target: string): Promise<CompileResu
   }
 
   const runtime = await getRuntime(target);
-  const gaps = runtime.unsupported(compiled.agent);
-  if (gaps.length) out(`  ⚠ target '${target}' does not support: ${gaps.join(", ")}\n`);
+  const gaps = classifyGaps(runtime.unsupported(compiled.agent));
 
-  return compiled;
+  for (const gap of gaps.degrading) out(`  ⚠ ${target}: ${gap.name} — ${gap.meaning}\n`);
+  for (const gap of gaps.blocking) out(`  ⛔ ${target}: ${gap.name} — ${gap.meaning}\n`);
+  for (const name of gaps.unknown) {
+    out(`  ⛔ ${target}: '${name}' is not a classified capability gap — treated as blocking\n`);
+  }
+
+  return { compiled, gaps };
 }
 
 function approver(mode: string): (req: ApprovalRequest) => Promise<ApprovalDecision> {
@@ -221,13 +232,14 @@ async function main(): Promise<number> {
   }
   const effectiveTarget = target ?? "mock";
 
-  let compiled: CompileResult;
+  let prepared: Prepared;
   try {
-    compiled = await loadAndCompile(args.manifest, effectiveTarget);
+    prepared = await loadAndCompile(args.manifest, effectiveTarget);
   } catch (e) {
     err(`\n${(e as Error).message}\n`);
     return 1;
   }
+  const compiled = prepared.compiled;
   const agent = compiled.agent;
 
   if (args.command === "inspect") {
@@ -270,6 +282,18 @@ async function main(): Promise<number> {
   }
 
   if (args.command === "run") {
+    // A gap that removes a restriction is not a degraded run, it is a run
+    // without the guarantee the manifest states. Refusing here is the only
+    // point where that distinction can still be acted on.
+    if (refusesRun(prepared.gaps)) {
+      err(
+        `\nrefusing to run: target '${effectiveTarget}' cannot honour this manifest.\n` +
+          `  Build for a target that can, or drop the field from the manifest so the\n` +
+          `  loss is visible where the guarantee is written.\n`,
+      );
+      return 1;
+    }
+
     const mode = flagString(args, "approve") ?? (process.stdin.isTTY ? "prompt" : "deny");
     const showTrace = args.flags.has("trace");
     const input =

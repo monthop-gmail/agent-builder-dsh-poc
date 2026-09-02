@@ -679,7 +679,69 @@ session ที่อยู่แค่ในหน่วยความจำจ
 ### 12.4 ที่ยังค้าง
 
 - **เปลี่ยนชื่อ `dsh` → `openai-compatible`** แล้วให้ `dsh` เป็น preset compiler + acp driver (ข้อ 5.6)
-- **`unsupported()` ยังแค่เตือน ไม่ล้ม build** (ข้อ 6) — ตอนนี้มี 5 ค่าจริงแล้ว
-  (`mcp.connect` · `trace.model_step` · `model.fallback` · `tools.local` · `policy.forbidden`)
-  สองตัวหลังเป็นเรื่องความปลอดภัย ไม่ใช่ degradation — **นี่คือจังหวะที่ต้องเขียนกติกาแล้ว**
+- ~~**`unsupported()` ยังแค่เตือน**~~ ✅ ทำแล้ว ดูข้อ 13
 - **agent identity** (ข้อ 3.3) · **sub-agent P5** · **Issue → PR P6**
+
+
+---
+
+## 13. กติกาของ `unsupported()`
+
+ปิดข้อ 6
+
+```
+npm test    95 passed (95)      ← เดิม 85
+```
+
+### 13.1 กติกา
+
+> **ช่องว่างที่ทำให้ข้อจำกัดหายไป → ปฏิเสธไม่ให้รัน
+> ช่องว่างที่ทำให้ความสามารถหายไป → เตือนแล้วรันต่อ**
+
+`spec.policy` กับ `spec.humanApproval` คือการ**จำกัด** สิ่งที่ agent ทำได้ คนอ่าน manifest
+อ่านมันเป็นการรับประกัน runtime ที่ honour ไม่ได้ ไม่ได้ให้ agent ที่ด้อยลง
+แต่ให้ agent ที่**ทำสิ่งที่ manifest ห้ามไว้ได้** การรันต่อจึงเป็น default ที่ผิด
+
+`spec.tools` · audit fidelity · model fallback คือการ**เพิ่ม**ความสามารถ เสียไปแล้ว
+agent ด้อยลง ไม่ได้หลุดกรอบ ถ้าปฏิเสธ คนก็จะแค่ลบ field ทิ้งเพื่อให้รันได้ ซึ่งแย่กว่า
+
+| gap | ระดับ |
+|---|---|
+| `policy.forbidden` · `policy.humanApproval` | ⛔ blocks |
+| `tools.local` · `mcp.connect` · `trace.model_step` · `model.fallback` | ⚠ degrades |
+| **ชื่อที่ยังไม่มีใครจัดระดับ** | ⛔ **blocks** |
+
+### 13.2 ทำไม adapter ไม่ได้เป็นคนตัดสินระดับ
+
+`unsupported()` ยังคืน **string เปล่า** เหมือนเดิม ระดับอยู่ที่
+`builder/registry/capabilities.ts` ที่เดียว เพราะความรุนแรงเป็นคุณสมบัติของ
+**สัญญาใน manifest** ไม่ใช่ของ adapter — runtime สองตัวที่พังแบบเดียวกันต้องถูกปฏิเสธแบบเดียวกัน
+
+และชื่อที่ไม่รู้จักถูกนับเป็น blocking โดยตั้งใจ ถ้านับเป็นแค่คำเตือน adapter จะ
+**ลดระดับความรุนแรงของตัวเองได้ด้วยการตั้งชื่อใหม่** — conformance จึงมีเทสต์เพิ่มว่า
+gap ที่ adapter คืนมาต้องเป็นชื่อที่จัดระดับไว้แล้ว กันทั้งการเลี่ยงและการพิมพ์ผิด
+
+### 13.3 ผลจริง
+
+```
+$ run manifests/code-reviewer.yaml --target acp
+  ⚠ acp: tools.local — granted tools defined here cannot cross into this target
+  ⛔ acp: policy.forbidden — the manifest forbids tools this target cannot withhold
+
+refusing to run: target 'acp' cannot honour this manifest.
+  Build for a target that can, or drop the field from the manifest so the
+  loss is visible where the guarantee is written.
+
+$ echo $?
+1
+```
+
+บังคับที่ `run` — `inspect` อธิบาย, `build` ยังออก package ได้ (เป็น artifact ไม่ใช่การรัน)
+**ไม่มี flag ให้ข้าม** ถ้ายอมเสียการรับประกันนั้นจริง ให้เสียมันในที่ที่การรับประกันถูกเขียนไว้
+คือใน manifest ไม่ใช่ใน command line ที่ไม่มีใครเห็นย้อนหลัง
+
+### 13.4 ผลข้างเคียงที่ต้องรู้
+
+`--target acp` ใช้กับ `code-reviewer.yaml` และ `workspace-researcher.yaml` **ไม่ได้แล้ว**
+เพราะทั้งคู่มี `policy.forbidden` นี่คือพฤติกรรมที่ถูก ไม่ใช่ regression — ที่ผ่านมามันรันได้
+โดยไม่บังคับ policy ต่างหากที่เป็นปัญหา manifest ที่ acp รันได้ต้องเขียนตามที่ acp honour ได้จริง

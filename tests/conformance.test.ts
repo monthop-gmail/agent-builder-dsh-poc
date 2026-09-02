@@ -6,6 +6,7 @@ import { loadManifest } from "../builder/loader.js";
 import { validateManifest, type AgentManifest } from "../builder/validator.js";
 import { compileManifest } from "../builder/compiler.js";
 import { getRuntime, listRuntimeIds, OFFLINE_RUNTIMES } from "../builder/registry/runtimes.js";
+import { classifyGaps } from "../builder/registry/capabilities.js";
 import { startOpenAiStub, type OpenAiStub } from "./support/openai-stub.js";
 import type { ApprovalRequest, TraceEvent } from "../builder/types.js";
 
@@ -90,6 +91,16 @@ describe.each(listRuntimeIds())("Runtime conformance — %s", (id) => {
   it("declares what it cannot do rather than failing later", async () => {
     const runtime = await getRuntime(id);
     expect(Array.isArray(runtime.unsupported(await compiled("coding-agent.yaml")))).toBe(true);
+  });
+
+  it("names only gaps the registry has classified", async () => {
+    // An unclassified name is refused at runtime, so a typo here would take a
+    // target offline in a way that reads like a policy decision.
+    const runtime = await getRuntime(id);
+    for (const fixture of ["coding-agent.yaml", "code-reviewer.yaml", "researcher.yaml"]) {
+      const report = classifyGaps(runtime.unsupported(await compiled(fixture)));
+      expect(report.unknown, `${id} on ${fixture}`).toEqual([]);
+    }
   });
 
   maybe("never receives a tool that policy forbade", async () => {
