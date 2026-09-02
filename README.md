@@ -2,7 +2,11 @@
 
 > เขียน Agent เป็น Manifest หนึ่งไฟล์ แล้ว build ลง runtime ไหนก็ได้
 
-**สถานะ: 🟢 PoC ใช้งานได้** — `npm test` ผ่าน 111 test, CLI รันได้จริง
+**สถานะ: 🟢 PoC ใช้งานได้ · canonical Agent Builder** — `npm test` ผ่าน 112 test, CLI รันได้จริง
+
+> repo นี้คือ implementation หลักของ Agent Builder
+> [`agent-builder-pi-poc`](https://github.com/monthop-gmail/agent-builder-pi-poc) ซึ่งเป็นที่ที่แนวคิดนี้เริ่ม
+> ถูกดูดเข้ามาเป็น `--target pi` แล้วและ freeze ไว้เป็น historical reference
 ยังไม่ใช่ production: ไม่มี UI, ไม่มี database, sub-agent ยังไม่ทำ (P5)
 
 ```text
@@ -332,8 +336,8 @@ trace/audit contract ที่เราจะเจอตอนมี adapter �
 ### repo ในระบบเดียวกัน
 
 [ecosystem-brief](https://github.com/monthop-gmail/ecosystem-brief) — แผนที่กลาง อ่านก่อนแตะ repo ไหน ·
-[agent-builder-pi-poc](https://github.com/monthop-gmail/agent-builder-pi-poc) — รวมเข้ามาเป็น target `pi` แล้ว
-เก็บไว้เป็นประวัติ ไม่ต้องแก้ต่อ
+[agent-builder-pi-poc](https://github.com/monthop-gmail/agent-builder-pi-poc) — 🧊 frozen
+รวมเข้ามาเป็น target `pi` แล้ว เก็บไว้เป็น historical reference ไม่ต้องแก้ต่อ
 
 ---
 
