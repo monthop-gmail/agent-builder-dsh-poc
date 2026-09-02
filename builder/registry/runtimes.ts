@@ -17,10 +17,23 @@ const LOADERS: Record<string, () => Promise<AgentRuntime>> = {
     const { DshRuntime } = await import("../../runtimes/dsh/adapter.js");
     return new DshRuntime();
   },
+  pi: async () => {
+    const { PiRuntime } = await import("../../runtimes/pi/adapter.js");
+    return new PiRuntime();
+  },
 };
 
-/** Runtimes that need no credentials or network — safe for CI. */
-export const OFFLINE_RUNTIMES = ["mock"];
+/**
+ * Runtimes the conformance suite runs in full.
+ *
+ * "Offline" means no credential and no outbound network — not "no model". A
+ * runtime whose model endpoint is an env var qualifies, because the suite can
+ * point it at a stub on 127.0.0.1. `pi` is here for exactly that reason: it
+ * reaches its model through the Builder's ModelBinding like every other
+ * adapter, so CI can give it a local endpoint and still exercise the real
+ * harness. A runtime left out of this list is a runtime nobody is testing.
+ */
+export const OFFLINE_RUNTIMES = ["dsh", "mock", "pi"];
 
 export function listRuntimeIds(): string[] {
   return Object.keys(LOADERS).sort();

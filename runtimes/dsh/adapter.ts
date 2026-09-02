@@ -8,6 +8,7 @@ import type {
   TraceEvent,
 } from "../../builder/types.js";
 import { attachMcpServers, type McpConnection } from "../mcp-client.js";
+import { indexByWireName } from "../../builder/tool-names.js";
 
 /**
  * DshRuntime — the DeepSeek Harness.
@@ -54,15 +55,6 @@ interface DshHandle extends AgentHandle {
   approvalRequired: Set<string>;
 }
 
-/**
- * OpenAI-compatible function names allow [A-Za-z0-9_-] only, but our tool
- * names are dotted (`github.read`, `collaboration.create_task`). Map both
- * ways so the manifest keeps its readable names.
- */
-function wireName(name: string): string {
-  return name.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 64);
-}
-
 export class DshRuntime implements AgentRuntime {
   readonly id = "dsh";
 
@@ -75,10 +67,7 @@ export class DshRuntime implements AgentRuntime {
     // turn out to expose, so `mcp.tools` here is already filtered.
     const mcp = await attachMcpServers(compiled);
 
-    const tools = new Map<string, ResolvedTool>();
-    for (const tool of [...compiled.tools, ...mcp.tools]) {
-      tools.set(wireName(tool.name), tool);
-    }
+    const tools = indexByWireName([...compiled.tools, ...mcp.tools]);
 
     const handle: DshHandle = {
       runtimeId: this.id,

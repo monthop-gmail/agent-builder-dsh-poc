@@ -157,10 +157,16 @@ Protocol     คุยผ่านสาย         ACP
 // pi   run(agent, input)                    ← ไม่มี
 ```
 
-pi ไม่มี `RunContext` เพราะ **Pi ไม่เปิด hook ที่ block ก่อนเรียก tool ได้**
-README ของ Pi เขียนเองว่า _"Pi does not include a built-in permission system"_ แล้วแนะนำ containerization แทน
+pi ไม่มี `RunContext` และ README ของ Pi ก็เขียนเองว่า
+_"Pi does not include a built-in permission system"_ แล้วแนะนำ containerization แทน
 
-→ manifest ใบเดียวกัน `autonomy: level 1` + `humanApproval` **แปลว่าคนละเรื่องบน Pi กับ dsh**
+> ⚠️ **แก้ข้อสรุปเดิม (ดูข้อ 10)** — ตอนแรกผมสรุปจากตรงนี้ว่า Pi บังคับ `humanApproval` ไม่ได้
+> **ผิด** Pi ไม่มี permission system ก็จริง แต่ adapter เป็นคนเขียน `execute` ของทุก tool เอง
+> จึงดักขออนุมัติก่อน side effect ได้ ตอนรวม repo ทำแล้วและมีเทสต์ยืนยัน
+> สิ่งที่ pi-poc ขาดคือ adapter ไม่ได้ทำ ไม่ใช่ Pi ทำไม่ได้
+
+→ ถึงอย่างนั้น ข้อสรุปหลักยังยืน: manifest ใบเดียวกัน `autonomy: level 1` + `humanApproval`
+**แปลว่าคนละเรื่องบน pi-poc กับ dsh-poc** ณ เวลาที่ตรวจ
 → `portability.test.ts` จับไม่ได้ เพราะมันพิสูจน์ว่า *package* เหมือนกัน ไม่ได้พิสูจน์ว่า *พฤติกรรม* เหมือนกัน
 
 ### 5.3 `forbidden` เป็นชื่อ tool แต่ความสามารถรั่วผ่าน built-in
@@ -455,3 +461,77 @@ Error: stdio app: the launcher must provide ctx.appExit and ctx.appReady
 `acp-spike.mjs` (ACP client แบบ raw ndjson ~110 บรรทัด) · `zen.cordis.patch.yml` ·
 `zen-headless.cordis.patch.yml` · `zen-mcp.cordis.patch.yml`
 ยังไม่ได้ commit เข้า repo — อยู่ในพื้นที่ชั่วคราวของ session ถ้าจะเก็บต้องย้ายเข้ามา
+
+
+---
+
+## 10. ผลการรวม `agent-builder-pi-poc` เข้ามาเป็น runtime `pi`
+
+ทำเมื่อ 2026-09-02 · `runtimes/pi/adapter.ts` · Pi `0.84.4`
+
+### 10.1 ผลรวม
+
+```
+npm test    64 passed (64)          ← เดิม 45 passed · 5 skipped
+```
+
+conformance เพิ่มจาก 14 เป็น 21 เคส และ **ไม่มี skip เหลือ** เพราะ suite ยก stub
+OpenAI-compatible ขึ้นบน 127.0.0.1 แล้วชี้ `LLM_GATEWAY_BASE_URL` ไปที่นั่น
+ทั้ง `dsh` และ `pi` จึงเข้า `OFFLINE_RUNTIMES` ได้ — "ต้องใช้ key" ไม่ใช่เหตุผลที่จะข้ามอีกต่อไป
+(ตรงกับที่ข้อ 6 เสนอไว้ว่า runtime ที่ไม่มีใครทดสอบ หน้าตาเหมือน runtime ที่ผ่าน)
+
+portability ยังจริงข้าม 3 target:
+
+```
+$ build code-reviewer.yaml --target mock | dsh | pi
+identical across mock/dsh/pi: True
+```
+
+รันจริงกับ opencode zen + MCP `collaboration` ตัวจริง:
+
+```
+$ run manifests/workspace-researcher.yaml --target pi --approve deny --trace
+  ⚠ target 'pi' does not support: trace.model_step
+  · model_call  {"model":"nemotron-3-ultra-free","tools":2}
+  · tool_call   {"tool":"collaboration.get_workspace_context","effect":"read",...}
+  · tool_result {"tool":"collaboration.get_workspace_context","chars":1256}
+  · finish      {"toolCalls":1}
+  (target: pi · tool calls: 1 · trace: 4 events)
+```
+
+### 10.2 ข้อสรุปที่ต้องแก้: Pi บังคับ approval ได้
+
+ในข้อ 5.2 ผมสรุปว่า Pi honour `humanApproval` ไม่ได้เพราะไม่มี permission system
+**ข้อสรุปนั้นผิด** Pi ไม่มี permission system ก็จริง แต่ adapter เป็นคนเขียน `execute`
+ของทุก tool เอง จึงดักขออนุมัติก่อน side effect ได้
+
+```
+✓ asks before a gated tool and does not run it on a denial   toolCalls = 0
+✓ runs a gated tool once approved                            toolCalls = 1
+```
+
+สิ่งที่ pi-poc ขาดคือ **adapter ไม่ได้ทำ** ไม่ใช่ **Pi ทำไม่ได้**
+
+บทเรียนที่กว้างกว่านั้น: "vendor ไม่มี permission system" ≠ "บังคับ policy ไม่ได้"
+ตราบใดที่ adapter ยังเป็นเจ้าของพื้นผิว tool — ซึ่งต่างจากเคส DSH-ผ่าน-ACP ในข้อ 9
+ที่ tool มาจาก harness เอง adapter จึงไม่มีอะไรให้ห่อ
+
+### 10.3 บั๊กของ pi-poc ที่ปิดโดยโครงสร้าง ไม่ใช่โดยวินัย
+
+| pi-poc เดิม | หลังรวม |
+|---|---|
+| `resolveModel().catch(() => undefined)` → เงียบ ๆ ใช้ default model ของ Pi | `registerProvider()` จาก `ModelBinding` ไม่แตะ catalog ของ pi-ai เลย ไม่มีอะไรให้ fallback |
+| MCP tool ถูกยัดเข้าโมเดลตรง ๆ ไม่ผ่าน policy | ผ่าน `runtimes/mcp-client.ts` ที่เดียว เหมือน `dsh` |
+| Pi built-in (`read`/`bash`/`edit`/`write`) หลุดเข้ามาได้ | `noTools: "all"` + allowlist — เทสต์ assert ว่า wire เห็นแค่ `github_read`, `github_comment` |
+| `wireName()` ก๊อปในแต่ละ adapter | `builder/tool-names.ts` ที่เดียว + throw เมื่อสองชื่อชนกันหลัง sanitize |
+| `spec.runtime: pi` ใน manifest | ไม่มีแล้ว — `--target pi` |
+
+### 10.4 ที่ยังไม่ได้ทำ
+
+- **`resume()`** ยัง throw ทั้ง 3 runtime — Pi ใช้ `SessionManager.inMemory()` ทางที่ถูกคือ
+  ทำผ่าน ACP (ข้อ 9.3) ไม่ใช่ต่อ session manager ของ Pi เอง
+- **`unsupported()` ยังแค่เตือน ไม่ล้ม build** — ข้อ 6 ยังค้าง ตอนนี้ `pi` รายงาน
+  `trace.model_step` แล้ว CLI พิมพ์ ⚠ แล้วรันต่อ ถ้าวันหน้ามี capability ที่เกี่ยวกับความปลอดภัย
+  ต้องเปลี่ยนเป็นล้ม build
+- **retry / audit sink / agent identity** (ข้อ 3.1–3.3) ยังไม่แตะ
+- **แยก `dsh` เป็น `openai-compatible` / `acp` / `dsh`** (ข้อ 5.6) ยังไม่ทำ — รอบนี้เพิ่ม `pi` อย่างเดียว

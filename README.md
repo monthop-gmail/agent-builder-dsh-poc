@@ -14,7 +14,7 @@
         └───────┬───────┘
                 │  CompiledAgent  (runtime-neutral)
                 ▼
-         Runtime Adapter               ← --target dsh | mock | (claude, gemini …)
+         Runtime Adapter               ← --target dsh | pi | mock
                 │
                 ▼
       DeepSeek Harness Runtime
@@ -151,13 +151,17 @@ builder/
   resolver.ts            ชื่อ → capability
   compiler.ts            Manifest → CompiledAgent
   packager.ts            CompiledAgent → .agentpkg.json
+  tool-names.ts          ชื่อ tool → ชื่อบน wire (ใช้ร่วมกันทุก adapter)
   registry/              tools · skills · mcp · models · policy · runtimes
 runtimes/
-  dsh/adapter.ts         DeepSeek Harness — ที่เดียวที่รู้จัก DSH
+  dsh/adapter.ts         loop แบบ OpenAI-compatible ที่เขียนเอง
+  pi/adapter.ts          Pi agent harness — Pi เป็นเจ้าของ loop
   mock/adapter.ts        runtime จริงที่ไม่ต่อเน็ต ใช้ใน CI
   mcp-client.ts          MCP → ResolvedTool
 cli/index.ts             validate · inspect · build · run · targets
-tests/                   manifest · policy · portability · conformance · dsh-runtime · mcp-policy
+tests/                   manifest · policy · portability · conformance · dsh-runtime · pi-runtime · mcp-policy
+  support/openai-stub.ts endpoint ปลอมบน 127.0.0.1 ให้ conformance รันได้ทุก adapter
+  fixtures/              manifest ที่มีไว้ทดสอบอย่างเดียว
 ```
 
 ---
