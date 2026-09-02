@@ -1,0 +1,218 @@
+{
+  "$comment": "generated from builder/validator.ts — do not edit by hand (agent/v1alpha2)",
+  "$ref": "#/definitions/AgentManifest",
+  "definitions": {
+    "AgentManifest": {
+      "type": "object",
+      "properties": {
+        "apiVersion": {
+          "type": "string",
+          "const": "agent/v1alpha2"
+        },
+        "kind": {
+          "type": "string",
+          "const": "Agent"
+        },
+        "metadata": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9-]*$"
+            },
+            "version": {
+              "type": "string",
+              "pattern": "^\\d+\\.\\d+\\.\\d+(?:-[0-9A-Za-z-.]+)?$"
+            },
+            "description": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "name",
+            "version"
+          ],
+          "additionalProperties": false
+        },
+        "spec": {
+          "type": "object",
+          "properties": {
+            "purpose": {
+              "type": "object",
+              "properties": {
+                "primary": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "required": [
+                "primary"
+              ],
+              "additionalProperties": false
+            },
+            "model": {
+              "type": "object",
+              "properties": {
+                "preferred": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "minItems": 1
+                }
+              },
+              "required": [
+                "preferred"
+              ],
+              "additionalProperties": false
+            },
+            "autonomy": {
+              "type": "object",
+              "properties": {
+                "level": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "level"
+              ],
+              "additionalProperties": false
+            },
+            "system": {
+              "type": "object",
+              "properties": {
+                "instructions": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "required": [
+                "instructions"
+              ],
+              "additionalProperties": false
+            },
+            "tools": {
+              "type": "object",
+              "properties": {
+                "allowed": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                }
+              },
+              "required": [
+                "allowed"
+              ],
+              "additionalProperties": false
+            },
+            "skills": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "mcp": {
+              "type": "object",
+              "properties": {
+                "servers": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                }
+              },
+              "required": [
+                "servers"
+              ],
+              "additionalProperties": false
+            },
+            "policy": {
+              "type": "object",
+              "properties": {
+                "forbidden": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                }
+              },
+              "required": [
+                "forbidden"
+              ],
+              "additionalProperties": false
+            },
+            "humanApproval": {
+              "type": "object",
+              "properties": {
+                "required": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                }
+              },
+              "required": [
+                "required"
+              ],
+              "additionalProperties": false
+            },
+            "audit": {
+              "type": "object",
+              "properties": {
+                "required": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "required"
+              ],
+              "additionalProperties": false
+            },
+            "subagents": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9-]*$"
+                  },
+                  "role": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "name",
+                  "role"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "purpose",
+            "model",
+            "autonomy"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "apiVersion",
+        "kind",
+        "metadata",
+        "spec"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "$schema": "http://json-schema.org/draft-07/schema#"
+}

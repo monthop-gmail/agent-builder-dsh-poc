@@ -1,0 +1,37 @@
+apiVersion: agent/v1alpha2
+kind: Agent
+
+metadata:
+  name: coding-agent
+  version: 0.1.0
+  description: Writes small changes and verifies its own arithmetic
+
+spec:
+  purpose:
+    primary: implement_change
+
+  model:
+    preferred:
+      - deepseek
+
+  autonomy:
+    level: 2
+
+  system:
+    instructions: |
+      Write the smallest correct change and explain how to verify it.
+
+  skills:
+    - coder
+
+  tools:
+    allowed:
+      - calculator
+      - current_time
+
+  mcp:
+    servers:
+      - filesystem
+
+  audit:
+    required: true

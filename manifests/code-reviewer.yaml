@@ -1,0 +1,45 @@
+# The P6 target: read a pull request, review it, comment — never merge.
+#
+# Note what is NOT in this file: nothing about DeepSeek, nothing about Pi,
+# no runtime at all. Pick one at build time:
+#   agent-builder run manifests/code-reviewer.yaml --target dsh
+#   agent-builder run manifests/code-reviewer.yaml --target mock
+
+apiVersion: agent/v1alpha2
+kind: Agent
+
+metadata:
+  name: github-code-reviewer
+  version: 0.1.0
+  description: Reviews a pull request and leaves findings as a comment
+
+spec:
+  purpose:
+    primary: review_pull_request
+
+  model:
+    preferred:
+      - deepseek
+
+  autonomy:
+    level: 2          # may read and write; anything irreversible needs a human
+
+  skills:
+    - code-review
+    - security-review
+
+  tools:
+    allowed:
+      - github.read
+      - github.comment
+
+  policy:
+    forbidden:
+      - github.merge  # withheld by the Builder — never reaches the runtime
+
+  humanApproval:
+    required:
+      - github.comment
+
+  audit:
+    required: true

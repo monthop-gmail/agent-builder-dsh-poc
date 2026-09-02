@@ -1,0 +1,26 @@
+{
+  "name": "agent-builder-dsh-poc",
+  "version": "0.1.0",
+  "description": "Build agents from a runtime-neutral Agent Manifest and run them on the DeepSeek Harness runtime",
+  "type": "module",
+  "bin": { "agent-builder": "./bin/agent-builder.js" },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "schema": "tsx scripts/emit-schema.ts",
+    "cli": "tsx cli/index.ts"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "yaml": "^2.6.0",
+    "zod": "^3.24.0",
+    "zod-to-json-schema": "^3.24.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0",
+    "vitest": "^2.1.0"
+  }
+}

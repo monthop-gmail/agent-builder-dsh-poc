@@ -1,0 +1,20 @@
+services:
+  agent-builder:
+    build: .
+    working_dir: /app
+    volumes:
+      # เอา manifest ของคุณเข้ามาที่ /manifests
+      - ./manifests:/manifests:ro
+      # workspace ที่ MCP filesystem จะเห็น
+      - ./workspace:/workspace
+    environment:
+      - LLM_GATEWAY_BASE_URL=${LLM_GATEWAY_BASE_URL:-}
+      - LLM_GATEWAY_API_KEY=${LLM_GATEWAY_API_KEY:-}
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY:-}
+      - FREE_LLM_REGISTRY_URL=${FREE_LLM_REGISTRY_URL:-}
+      - GITHUB_TOKEN=${GITHUB_TOKEN:-}
+      - AI_COLLAB_MCP_TOKEN=${AI_COLLAB_MCP_TOKEN:-}
+      - AGENT_BUILDER_FS_ROOT=/workspace
+    # ตัวอย่าง:
+    #   docker compose run --rm agent-builder inspect /manifests/code-reviewer.yaml --target dsh
+    #   docker compose run --rm agent-builder run /manifests/researcher.yaml --target dsh --input "hello"

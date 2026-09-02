@@ -1,0 +1,178 @@
+# agent-builder-dsh-poc
+
+> เขียน Agent เป็น Manifest หนึ่งไฟล์ แล้ว build ลง runtime ไหนก็ได้ — DeepSeek Harness เป็นตัวแรก
+
+**สถานะ: 🟢 PoC ใช้งานได้** — `npm test` ผ่าน 29 test, CLI รันได้จริง
+ยังไม่ใช่ production: ไม่มี UI, ไม่มี database, sub-agent ยังไม่ทำ (P5)
+
+```text
+        Agent Manifest (.yaml)          ← WHAT · ไม่รู้จัก runtime ใด ๆ
+                │
+                ▼
+        ┌───────────────┐
+        │ Agent Builder │  load → validate → resolve → policy → compile → package
+        └───────┬───────┘
+                │  CompiledAgent  (runtime-neutral)
+                ▼
+         Runtime Adapter               ← --target dsh | mock | (claude, gemini …)
+                │
+                ▼
+      DeepSeek Harness Runtime
+       model · tools · MCP · trace
+```
+
+---
+
+## เป้าหมายเดียวของ PoC นี้
+
+> **เปลี่ยน runtime target ได้โดยไม่แก้ Manifest แม้แต่บรรทัดเดียว**
+
+`tests/portability.test.ts` พิสูจน์ข้อนี้: build manifest เดียวกันลงทุก target ที่ลงทะเบียนไว้
+แล้ว assert ว่า checksum ของ manifest และ capability ที่ agent ได้รับ **เท่ากันหมด**
+
+```bash
+$ agent-builder build manifests/code-reviewer.yaml --target mock --out m.json
+$ agent-builder build manifests/code-reviewer.yaml --target dsh  --out d.json
+$ diff <(jq 'del(.target,.builtAt)' m.json) <(jq 'del(.target,.builtAt)' d.json)
+   # ไม่มี diff
+```
+
+---
+
+## เริ่มใช้งาน
+
+```bash
+npm install --ignore-scripts
+npm run build
+
+# ไม่ต้องใช้ key เลย — mock เป็น runtime จริงที่ไม่ต่อเน็ต
+node dist/cli/index.js targets
+node dist/cli/index.js inspect manifests/code-reviewer.yaml --target dsh
+node dist/cli/index.js run manifests/code-reviewer.yaml --target mock --approve deny --trace
+
+# รันจริงบน DeepSeek Harness
+cp .env.example .env      # ใส่ LLM_GATEWAY_BASE_URL + LLM_GATEWAY_API_KEY
+node --env-file=.env dist/cli/index.js run manifests/researcher.yaml \
+  --target dsh --input "อธิบาย MCP protocol สั้น ๆ"
+```
+
+| คำสั่ง | ทำอะไร |
+|---|---|
+| `validate <manifest>` | ตรวจกับ contract + registry |
+| `inspect <manifest> [--target]` | โชว์ว่า Builder resolve อะไรให้ และ policy หักอะไรออก |
+| `build <manifest> --target <id>` | ออกเป็น `.agentpkg.json` |
+| `run <manifest> --target <id>` | compile แล้วรัน |
+| `targets` | รายชื่อ target + ตาราง autonomy level |
+
+---
+
+## ทำไมโครงเป็นแบบนี้
+
+### Manifest ไม่มี `spec.runtime`
+
+runtime คือ **build target** ไม่ใช่คุณสมบัติของ agent — เหมือน `gcc --target` ที่ไม่ได้เขียนอยู่ในไฟล์ `.c`
+ถ้า manifest ระบุ runtime ได้ ก็แปลว่ามันรู้จัก runtime และ portability ก็หายไปทันที
+validator จะ reject `spec.runtime` พร้อมบอกให้ใช้ `--target` แทน
+
+### Policy บังคับที่ Builder ไม่ใช่ที่ runtime
+
+```
+granted = allowed − forbidden          ← หักที่ Builder
+```
+
+tool ที่ถูก forbid **ไม่เคยเดินทางไปถึง runtime** ดังนั้น adapter ที่เขียนใหม่แล้วลืมเช็ค policy
+ก็ยังปลอดภัย เพราะไม่มี tool ให้เรียกตั้งแต่แรก ถ้าให้ runtime เป็นคนบังคับ ทุก adapter ใหม่คือ
+โอกาสใหม่ที่จะลืม
+
+### Autonomy ผูกกับ `effect` ของ tool
+
+ทุก tool ประกาศ `effect` ว่า `read` / `write` / `irreversible`
+`spec.autonomy.level` บอกว่า effect ไหนที่ agent ทำเองได้ ที่เหลือกลายเป็น approval request
+
+| level | ชื่อ | ทำเองได้ |
+|---|---|---|
+| 0 | observe | ไม่มี — ทุกอย่างต้องขออนุมัติ |
+| 1 | read | `read` |
+| 2 | propose | `read`, `write` |
+| 3 | act | ทุกอย่างที่ไม่ติด forbidden/humanApproval |
+
+### Adapter ไม่เคยเห็น Manifest
+
+`AgentRuntime` รับ `CompiledAgent` เท่านั้น — ไม่มี `validate(manifest)` และไม่มี `compile(manifest)`
+adapter ที่อ่าน manifest ได้ จะค่อย ๆ งอกพฤติกรรมเฉพาะ manifest แล้ว portability ตายเงียบ ๆ
+ถ้า adapter ทำอะไรไม่ได้ ให้บอกผ่าน `unsupported(compiled)` แทน
+
+### MCP tool คือ tool ธรรมดา
+
+tool จาก MCP server ถูกแปลงเป็น `ResolvedTool` ตัวเดียวกับ tool ในเครื่อง
+ทำให้ policy, approval และ trace ใช้เส้นทางเดียวกันหมด ไม่มี code path ที่สอง
+
+---
+
+## โครงสร้าง
+
+```text
+manifests/               ตัวอย่าง 3 ตัว — researcher · code-reviewer · coding-agent
+schema/                  JSON Schema (generate จาก zod ด้วย npm run schema)
+builder/
+  types.ts               CompiledAgent + AgentRuntime — ห้าม import runtime
+  loader.ts              ไฟล์ → object + sha256 checksum
+  validator.ts           contract agent/v1alpha2 (source of truth ของ schema)
+  resolver.ts            ชื่อ → capability
+  compiler.ts            Manifest → CompiledAgent
+  packager.ts            CompiledAgent → .agentpkg.json
+  registry/              tools · skills · mcp · models · policy · runtimes
+runtimes/
+  dsh/adapter.ts         DeepSeek Harness — ที่เดียวที่รู้จัก DSH
+  mock/adapter.ts        runtime จริงที่ไม่ต่อเน็ต ใช้ใน CI
+  mcp-client.ts          MCP → ResolvedTool
+cli/index.ts             validate · inspect · build · run · targets
+tests/                   manifest · policy · portability · conformance
+```
+
+---
+
+## เขียน adapter ตัวใหม่
+
+1. implement `AgentRuntime` (5 เมธอด) ใน `runtimes/<id>/adapter.ts`
+2. ลงทะเบียนใน `builder/registry/runtimes.ts` — **ไฟล์เดียว** ไม่มีที่อื่นที่ต้องแก้
+3. ให้ผ่าน `tests/conformance.test.ts` ซึ่งรันกับทุก runtime ที่ลงทะเบียนโดยอัตโนมัติ
+
+รายละเอียดใน [`docs/runtime-adapter.md`](docs/runtime-adapter.md)
+
+---
+
+## Definition of Done
+
+| # | ความสามารถ | สถานะ | พิสูจน์ด้วย |
+|---|---|---|---|
+| 1 | Agent Manifest | ✅ | `manifest.test.ts` — 3 ตัวอย่าง validate ผ่าน |
+| 2 | Validation | ✅ | field แปลกปลอมและ `spec.runtime` ถูก reject |
+| 3 | Capability Registry | ✅ | 6 registry: tool · skill · mcp · model · policy · runtime |
+| 4 | Builder / Compiler | ✅ | `CompiledAgent` ไม่มี type ของ vendor |
+| 5 | DSH Runtime | ✅ | agent loop + tool calling + MCP + trace |
+| 6 | MCP | ✅ | stdio + Streamable HTTP · `collaboration` ต่อ ai-collaboration-mcp |
+| 7 | Sub-agent | ⏳ P5 | schema รับ `spec.subagents` แล้ว ยังไม่ compile |
+| 8 | Issue → PR ⭐ | ⏳ P6 | `code-reviewer.yaml` + `github.*` tools พร้อมแล้ว |
+| ★ | **สลับ runtime โดยไม่แก้ Manifest** | ✅ | `portability.test.ts` — build ทุก target แล้ว assert ว่าเท่ากัน |
+
+---
+
+## ที่เกี่ยวกับ ecosystem
+
+- repo นี้อยู่ชั้น **L4 (Harness & Agent)** เสนอ Agent Manifest เป็น contract ให้ `agent-platform` (L3) รับไปเป็นเจ้าของ
+- **B1 (gateway boundary)** — ตั้ง `LLM_GATEWAY_BASE_URL` แล้วทุก LLM call ออกทาง `llm-gateway`
+  ถ้าไม่ตั้ง Builder จะ**เตือนว่ากำลังข้าม boundary** แล้วค่อยยิงตรง ไม่เงียบ
+- **model list เป็นของ `free-llm-registry`** — ตั้ง `FREE_LLM_REGISTRY_URL` แล้ว catalog ในโค้ดจะถูกแทนที่
+  seed ที่ฝังไว้เป็น fallback ตอน offline เท่านั้น
+- ก่อนทำ **P6 (Issue → PR)** ต้องคุยกับ `ai-web-harness` (L4, เจ้าของ workflow
+  requirement→design→implement→test→review→fix) และ `devfactory-core` (L7, orchestration) ก่อน
+
+อ้างอิง: [ecosystem-brief](https://github.com/monthop-gmail/ecosystem-brief) ·
+[agent-builder-pi-poc](https://github.com/monthop-gmail/agent-builder-pi-poc) (Pi runtime, จะรวมกันภายหลังเป็น `agent-builder-poc`)
+
+---
+
+## ขอบเขต PoC (ยังไม่ทำ)
+
+UI · database · orchestration · sub-agent (P5) · `resume()` (interface มีแล้ว)
