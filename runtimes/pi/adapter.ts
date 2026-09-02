@@ -70,11 +70,17 @@ export class PiRuntime implements AgentRuntime {
   readonly id = "pi";
 
   unsupported(compiled: CompiledAgent): string[] {
+    const gaps: string[] = [];
     // Pi owns the loop, so the adapter cannot see each model step — it can
     // report the turn it started and every tool call, but not per-step model
     // calls the way an adapter that drives the loop itself can. That is a
     // fidelity gap in the audit trail and only matters when audit is on.
-    return compiled.audit ? ["trace.model_step"] : [];
+    if (compiled.audit) gaps.push("trace.model_step");
+    // A Pi session is bound to one provider registration, so the manifest's
+    // remaining `model.preferred` entries are not reachable mid-run. Said
+    // plainly rather than letting a manifest look like it has a fallback.
+    if (compiled.modelFallbacks.length) gaps.push("model.fallback");
+    return gaps;
   }
 
   async createAgent(compiled: CompiledAgent): Promise<AgentHandle> {

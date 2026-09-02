@@ -3,6 +3,8 @@ import { createInterface } from "node:readline/promises";
 import { loadManifest } from "../builder/loader.js";
 import { validateManifest, type AgentManifest } from "../builder/validator.js";
 import { compileManifest, type CompileResult } from "../builder/compiler.js";
+import { openAuditLog } from "../builder/audit.js";
+import { RunAborted, executedTools } from "../builder/errors.js";
 import { packageAgent, writePackage } from "../builder/packager.js";
 import { getRuntime, listRuntimeIds } from "../builder/registry/runtimes.js";
 import {
@@ -31,6 +33,7 @@ Options:
   --out <file>      Where to write the package (build)
   --approve <mode>  auto | deny | prompt   (default: prompt on a TTY, else deny)
   --trace           Print audit trace events as they happen
+  --audit-log <f>   Append the run and its trace to <f> as JSON Lines
   --provider <name> Which catalog entry to query for live model ids (models)
 
 A runtime is a build target, not part of the agent: the same manifest builds
@@ -271,12 +274,24 @@ async function main(): Promise<number> {
     const input =
       flagString(args, "input") ?? "Introduce yourself and name one thing you can do with your tools.";
 
+    const auditPath = flagString(args, "audit-log");
+    const audit = auditPath
+      ? await openAuditLog(resolve(auditPath), { agent, target: effectiveTarget, input })
+      : undefined;
+    if (audit) out(`  · run ${audit.runId} → ${auditPath}\n`);
+    // The manifest asked to be audited; saying so beats keeping the trail in
+    // this process and losing it on exit.
+    if (agent.audit && !audit) {
+      err(`  ⚠ manifest requires audit but nothing is storing it — pass --audit-log <file>\n`);
+    }
+
     const runtime = await getRuntime(effectiveTarget);
     const handle = await runtime.createAgent(agent);
     try {
       const result = await runtime.run(handle, input, {
         requestApproval: approver(mode),
         onTrace: (e: TraceEvent) => {
+          audit?.record(e);
           if (showTrace) out(`  · ${e.kind} ${JSON.stringify(e.detail)}\n`);
         },
       });
@@ -285,9 +300,19 @@ async function main(): Promise<number> {
       return 0;
     } catch (e) {
       err(`\nrun failed: ${(e as Error).message}\n`);
+      // A failure after a tool ran is the dangerous case: the side effect is
+      // real whatever the exit code says.
+      if (e instanceof RunAborted) {
+        const landed = executedTools(e.result);
+        if (landed.length) {
+          err(`\n⚠ ${landed.length} tool call(s) completed before the failure — their effects are live:\n`);
+          for (const name of landed) err(`    ✓ ${name}\n`);
+        }
+      }
       return 1;
     } finally {
       await handle.dispose().catch(() => {});
+      await audit?.close().catch((error: Error) => err(`  ⚠ ${error.message}\n`));
     }
   }
 

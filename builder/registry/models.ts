@@ -87,14 +87,33 @@ export function catalogOrigin(): string {
   return catalogSource;
 }
 
-/** Resolve the first entry of `preferred` that the catalog knows about. */
-export function resolveModel(preferred: string[]): ModelBinding {
-  const requested = preferred.find((name) => hasModel(name));
-  if (!requested) {
+/**
+ * Resolve every entry of `preferred` the catalog knows about, in order.
+ *
+ * `preferred` is a preference list, so it is also a fallback list: an
+ * endpoint that answers 429 all afternoon should not end the run when the
+ * manifest already named an alternative. The first entry is the one the
+ * agent uses; the rest travel with it for a runtime that can switch.
+ *
+ * Entries the catalog does not know are skipped rather than fatal — the
+ * catalog is owned by free-llm-registry and changes without this repo.
+ */
+export function resolveModelChain(preferred: string[]): ModelBinding[] {
+  const chain = preferred.filter((name) => hasModel(name)).map(bindModel);
+  if (!chain.length) {
     throw new Error(
       `model: none of [${preferred.join(", ")}] is in the catalog (known: ${listModelNames().join(", ")})`,
     );
   }
+  return chain;
+}
+
+/** The model the agent runs on: the first resolvable entry of `preferred`. */
+export function resolveModel(preferred: string[]): ModelBinding {
+  return resolveModelChain(preferred)[0] as ModelBinding;
+}
+
+function bindModel(requested: string): ModelBinding {
   const entry = catalog[requested] as CatalogEntry;
   if (!entry.id) {
     throw new Error(
