@@ -2,7 +2,7 @@
 
 > เขียน Agent เป็น Manifest หนึ่งไฟล์ แล้ว build ลง runtime ไหนก็ได้
 
-**สถานะ: 🟢 PoC ใช้งานได้ · canonical Agent Builder** — `npm test` ผ่านครบทุก suite ไม่มี skip, CLI รันได้จริง
+**สถานะ: 🟢 PoC ใช้งานได้ · canonical Agent Builder · contract `agent/v1alpha2` freeze แล้ว** — `npm test` ผ่านครบทุก suite ไม่มี skip, CLI รันได้จริง
 
 > repo นี้คือ implementation หลักของ Agent Builder
 > [`agent-builder-pi-poc`](https://github.com/monthop-gmail/agent-builder-pi-poc) ซึ่งเป็นที่ที่แนวคิดนี้เริ่ม
@@ -88,6 +88,7 @@ agent-builder run manifests/researcher.yaml --target openai-compatible --input "
 | `run <manifest> --target <id>` | compile แล้วรัน (`--audit-log <f>` เก็บ trace · `--resume <id>` ต่อ session เดิม) |
 | `targets` | รายชื่อ target + ตาราง autonomy level |
 | `npm run docs:capabilities` | สร้าง [`docs/capability-matrix.md`](docs/capability-matrix.md) ใหม่จากโค้ด |
+| `npm run compat:baseline` | อัปเดต baseline ของ contract — **ทำเมื่อ bump version เท่านั้น** ดู [`contract-stability.md`](docs/contract-stability.md) |
 
 📚 เอกสารทั้งหมดและ contract สี่ตัว: [`docs/`](docs/README.md)
 | `models [--provider <n>]` | catalog ในเครื่อง + ถาม endpoint จริงว่าเสิร์ฟ model อะไร |
@@ -276,6 +277,7 @@ cli/index.ts             validate · inspect · build · run · targets
 tests/                   manifest · policy · portability · conformance · resilience · capabilities
                          openai-compatible-runtime · pi-runtime · acp-runtime · dsh-preset · mcp-policy
   conformance/vectors/   ชุด vector กลาง — runtime ทุกตัวถูกทดสอบด้วยชุดเดียวกัน
+  compatibility/         golden manifest ที่ freeze ไว้ + baseline ของ contract
   support/acp-stub-agent.mjs  ACP agent จำลอง เก็บ session ลงไฟล์เพื่อทดสอบ resume ข้าม process
   support/openai-stub.ts endpoint ปลอมบน 127.0.0.1 ให้ conformance รันได้ทุก adapter
   fixtures/              fixture เฉพาะทางที่ไม่ใช่ vector กลาง

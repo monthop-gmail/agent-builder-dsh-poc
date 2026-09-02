@@ -1,0 +1,334 @@
+{
+  "v1alpha2-mcp.yaml": {
+    "manifestChecksum": "66a2fe71c0699b3c9a0358d4e77290036d375237766d4146019b17ebb884109d",
+    "purpose": "work_with_files",
+    "model": {
+      "requested": "deepseek",
+      "id": "deepseek-chat",
+      "route": "direct",
+      "apiKeyEnv": "DEEPSEEK_API_KEY",
+      "baseUrl": "https://api.deepseek.com/v1"
+    },
+    "modelFallbacks": [],
+    "systemPromptLines": 1,
+    "tools": [
+      {
+        "name": "current_time",
+        "effect": "read"
+      }
+    ],
+    "skills": [],
+    "mcpServers": [
+      {
+        "name": "filesystem",
+        "transport": "stdio"
+      }
+    ],
+    "autonomy": {
+      "level": 2,
+      "allowedEffects": [
+        "read",
+        "write"
+      ]
+    },
+    "approvalRequired": [],
+    "droppedByPolicy": [],
+    "policy": {
+      "forbidden": [],
+      "humanApproval": []
+    },
+    "audit": true,
+    "runtimes": {
+      "acp": {
+        "unsupported": [
+          "tools.local"
+        ],
+        "refusesRun": false
+      },
+      "dsh": {
+        "unsupported": [
+          "tools.local"
+        ],
+        "refusesRun": false
+      },
+      "mock": {
+        "unsupported": [
+          "mcp.connect"
+        ],
+        "refusesRun": false
+      },
+      "openai-compatible": {
+        "unsupported": [],
+        "refusesRun": false
+      },
+      "pi": {
+        "unsupported": [
+          "trace.model_step"
+        ],
+        "refusesRun": false
+      }
+    }
+  },
+  "v1alpha2-minimal.yaml": {
+    "manifestChecksum": "21315da450f82dd57d7dcaa6fbc849fcc8a5d4a7bd7a6b0f09db8211359f1e63",
+    "purpose": "answer_questions",
+    "model": {
+      "requested": "deepseek",
+      "id": "deepseek-chat",
+      "route": "direct",
+      "apiKeyEnv": "DEEPSEEK_API_KEY",
+      "baseUrl": "https://api.deepseek.com/v1"
+    },
+    "modelFallbacks": [],
+    "systemPromptLines": 1,
+    "tools": [],
+    "skills": [],
+    "mcpServers": [],
+    "autonomy": {
+      "level": 1,
+      "allowedEffects": [
+        "read"
+      ]
+    },
+    "approvalRequired": [],
+    "droppedByPolicy": [],
+    "policy": {
+      "forbidden": [],
+      "humanApproval": []
+    },
+    "audit": false,
+    "runtimes": {
+      "acp": {
+        "unsupported": [],
+        "refusesRun": false
+      },
+      "dsh": {
+        "unsupported": [],
+        "refusesRun": false
+      },
+      "mock": {
+        "unsupported": [],
+        "refusesRun": false
+      },
+      "openai-compatible": {
+        "unsupported": [],
+        "refusesRun": false
+      },
+      "pi": {
+        "unsupported": [],
+        "refusesRun": false
+      }
+    }
+  },
+  "v1alpha2-observer.yaml": {
+    "manifestChecksum": "80ee3ab45b2af3cb71a13f91fbc82b539d127adb23eef38f96319618b5f7deca",
+    "purpose": "observe_only",
+    "model": {
+      "requested": "deepseek",
+      "id": "deepseek-chat",
+      "route": "direct",
+      "apiKeyEnv": "DEEPSEEK_API_KEY",
+      "baseUrl": "https://api.deepseek.com/v1"
+    },
+    "modelFallbacks": [],
+    "systemPromptLines": 4,
+    "tools": [
+      {
+        "name": "current_time",
+        "effect": "read"
+      }
+    ],
+    "skills": [],
+    "mcpServers": [],
+    "autonomy": {
+      "level": 0,
+      "allowedEffects": []
+    },
+    "approvalRequired": [
+      "current_time"
+    ],
+    "droppedByPolicy": [],
+    "policy": {
+      "forbidden": [],
+      "humanApproval": []
+    },
+    "audit": true,
+    "runtimes": {
+      "acp": {
+        "unsupported": [
+          "tools.local"
+        ],
+        "refusesRun": false
+      },
+      "dsh": {
+        "unsupported": [
+          "tools.local"
+        ],
+        "refusesRun": false
+      },
+      "mock": {
+        "unsupported": [],
+        "refusesRun": false
+      },
+      "openai-compatible": {
+        "unsupported": [],
+        "refusesRun": false
+      },
+      "pi": {
+        "unsupported": [
+          "trace.model_step"
+        ],
+        "refusesRun": false
+      }
+    }
+  },
+  "v1alpha2-policy.yaml": {
+    "manifestChecksum": "c3847d65103f49f6c9e335a8fc89eea4b7f78071a8a56290e3efba1a54277ed9",
+    "purpose": "review_a_change",
+    "model": {
+      "requested": "deepseek",
+      "id": "deepseek-chat",
+      "route": "direct",
+      "apiKeyEnv": "DEEPSEEK_API_KEY",
+      "baseUrl": "https://api.deepseek.com/v1"
+    },
+    "modelFallbacks": [],
+    "systemPromptLines": 11,
+    "tools": [
+      {
+        "name": "github.comment",
+        "effect": "write"
+      },
+      {
+        "name": "github.read",
+        "effect": "read"
+      }
+    ],
+    "skills": [
+      "code-review"
+    ],
+    "mcpServers": [],
+    "autonomy": {
+      "level": 2,
+      "allowedEffects": [
+        "read",
+        "write"
+      ]
+    },
+    "approvalRequired": [
+      "github.comment"
+    ],
+    "droppedByPolicy": [
+      "github.merge"
+    ],
+    "policy": {
+      "forbidden": [
+        "github.merge"
+      ],
+      "humanApproval": [
+        "github.comment"
+      ]
+    },
+    "audit": true,
+    "runtimes": {
+      "acp": {
+        "unsupported": [
+          "policy.forbidden",
+          "tools.local"
+        ],
+        "refusesRun": true
+      },
+      "dsh": {
+        "unsupported": [
+          "policy.forbidden",
+          "tools.local"
+        ],
+        "refusesRun": true
+      },
+      "mock": {
+        "unsupported": [],
+        "refusesRun": false
+      },
+      "openai-compatible": {
+        "unsupported": [],
+        "refusesRun": false
+      },
+      "pi": {
+        "unsupported": [
+          "trace.model_step"
+        ],
+        "refusesRun": false
+      }
+    }
+  },
+  "v1alpha2-tools.yaml": {
+    "manifestChecksum": "1c716f10f9d23a1338982dadf453ecedfc3746d7ce8c42257427dc0f4cf09287",
+    "purpose": "research_a_topic",
+    "model": {
+      "requested": "deepseek",
+      "id": "deepseek-chat",
+      "route": "direct",
+      "apiKeyEnv": "DEEPSEEK_API_KEY",
+      "baseUrl": "https://api.deepseek.com/v1"
+    },
+    "modelFallbacks": [
+      "glm"
+    ],
+    "systemPromptLines": 8,
+    "tools": [
+      {
+        "name": "current_time",
+        "effect": "read"
+      },
+      {
+        "name": "web_search",
+        "effect": "read"
+      }
+    ],
+    "skills": [
+      "research"
+    ],
+    "mcpServers": [],
+    "autonomy": {
+      "level": 1,
+      "allowedEffects": [
+        "read"
+      ]
+    },
+    "approvalRequired": [],
+    "droppedByPolicy": [],
+    "policy": {
+      "forbidden": [],
+      "humanApproval": []
+    },
+    "audit": false,
+    "runtimes": {
+      "acp": {
+        "unsupported": [
+          "tools.local"
+        ],
+        "refusesRun": false
+      },
+      "dsh": {
+        "unsupported": [
+          "tools.local"
+        ],
+        "refusesRun": false
+      },
+      "mock": {
+        "unsupported": [],
+        "refusesRun": false
+      },
+      "openai-compatible": {
+        "unsupported": [],
+        "refusesRun": false
+      },
+      "pi": {
+        "unsupported": [
+          "model.fallback"
+        ],
+        "refusesRun": false
+      }
+    }
+  }
+}

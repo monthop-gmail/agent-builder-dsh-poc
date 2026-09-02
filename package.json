@@ -12,7 +12,8 @@
     "test": "vitest run",
     "schema": "tsx scripts/emit-schema.ts",
     "cli": "tsx cli/index.ts",
-    "docs:capabilities": "tsx scripts/emit-capability-matrix.ts"
+    "docs:capabilities": "tsx scripts/emit-capability-matrix.ts",
+    "compat:baseline": "tsx scripts/emit-compatibility-baseline.ts"
   },
   "dependencies": {
     "@earendil-works/pi-ai": "0.84.4",

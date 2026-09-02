@@ -1,0 +1,17 @@
+apiVersion: agent/v1alpha2
+kind: Agent
+metadata:
+  name: compat-observer
+  version: 1.0.0
+  description: The most restricted shape a manifest can take
+spec:
+  purpose:
+    primary: observe_only
+  model:
+    preferred: [deepseek]
+  autonomy:
+    level: 0
+  tools:
+    allowed: [current_time]
+  audit:
+    required: true

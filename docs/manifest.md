@@ -5,7 +5,10 @@ Manifest คือ **specification ของ agent** ไม่ใช่ config �
 > ทำไมเป็น `v1alpha2` ไม่ใช่ `v1` — `agent-builder-pi-poc` ใช้ `agent/v1` ไปแล้ว
 > และรูปทรงของ `model` / `tools` / `mcp` ในเวอร์ชันนี้ **ไม่เข้ากันย้อนหลัง**
 > เปลี่ยนความหมายใต้ชื่อเดิมจะทำให้ manifest เก่าพังเงียบ ๆ
-> จะ freeze เป็น `agent/v1` ตอนส่งมอบให้ `agent-platform`
+> **`v1alpha2` คือ contract ที่ freeze แล้วของ Agent Builder PoC ตัวนี้**
+> การโปรโมตเป็น `agent/v1` เป็น compatibility milestone แยกต่างหาก
+> และ **ไม่ใช่เงื่อนไข** ของการ integrate กับ `agent-platform`
+> — กติกาเต็มอยู่ใน [`contract-stability.md`](contract-stability.md)
 
 ## โครงเต็ม
 

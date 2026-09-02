@@ -1,0 +1,19 @@
+apiVersion: agent/v1alpha2
+kind: Agent
+metadata:
+  name: compat-tools
+  version: 1.0.0
+  description: Grants tools and a skill
+spec:
+  purpose:
+    primary: research_a_topic
+  model:
+    preferred: [deepseek, glm]
+  autonomy:
+    level: 1
+  system:
+    instructions: |
+      Cite what you find.
+  skills: [research]
+  tools:
+    allowed: [current_time, web_search]

@@ -1,0 +1,12 @@
+apiVersion: agent/v1alpha2
+kind: Agent
+metadata:
+  name: compat-minimal
+  version: 1.0.0
+spec:
+  purpose:
+    primary: answer_questions
+  model:
+    preferred: [deepseek]
+  autonomy:
+    level: 1
