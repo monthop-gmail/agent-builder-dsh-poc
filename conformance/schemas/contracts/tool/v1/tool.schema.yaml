@@ -57,3 +57,30 @@ properties:
   deprecated:
     type: boolean
     default: false
+
+platform_rules:
+  description: >-
+    กฎระดับ schema ที่ `agent-platform` เพิ่มเอง — ไม่ใช่ semantics ของ tool แต่ละตัว
+  rules:
+    - "ชื่อภายในของ registry กับ `ToolId` บน wire **ไม่จำเป็นต้องเป็นชื่อเดียวกัน**
+       (ADR-0027) — registry เก็บ `calculator` ต่อไปได้ ส่วนชื่อที่ประกาศออกมาเป็น
+       `math.evaluate` โดย map ที่ขอบเขตเดียว · แบบเดียวกับที่ devfactory-core map
+       supersedes_decision_id → supersedes_approval_id ที่ decision.WIRE_FIELD_NAMES"
+    - "การแปลงชื่อจาก server ภายนอกเป็น `ToolId` **ต้อง deterministic** — ถ้าแต่ละ
+       consumer แปลงเอง tool ตัวเดียวกันจะมี ToolId คนละชุด แล้วเพดานเชิงชื่อของ
+       profile จะคุ้มรายหนึ่งแต่ไม่คุ้มอีกราย ซึ่งทำลายฐานของ ADR-0026
+       ขั้นตอน: (1) lowercase (2) อักขระนอก [a-z0-9_] เป็น `_` ทีละตัว **ห้ามยุบซ้ำ**
+       เพราะการยุบสร้างการชนเพิ่มโดยไม่จำเป็น และ `a__b` ถูกต้องตาม pattern อยู่แล้ว
+       (3) เติม segment ของ namespace ไว้หน้า — สำหรับ MCP คือ `server_id`"
+    - "ถ้าแปลงแล้วยังไม่ match `ToolId` (เช่นชื่อขึ้นต้นด้วยตัวเลข `2fa_setup`)
+       → **reject แล้วบังคับ mapping ที่เขียนมือ ห้ามเดา prefix ให้** — การเดาทำให้ผล
+       ไม่ deterministic ข้าม implementation ซึ่งย้อนแย้งกับเหตุผลของกฎข้อบน"
+    - "ถ้าแปลงแล้ว **ชนกัน** → **reject ไม่ใช่เลือกอันใดอันหนึ่ง** — การชนเกิดจากการแปลง
+       ของเราเอง ไม่ใช่ความผิดของ server · ปล่อยเงียบแปลว่า tool คนละตัวอยู่หลัง id
+       เดียวกัน และ policy ที่เขียนถึงตัวหนึ่งจะไปคุมอีกตัวโดยไม่มีใครรู้
+       (หลักเดียวกับ consent/v1 tenant mismatch และ ADR-0022 required ∩ deny)"
+    - "**การแปลงต้องย้อนกลับได้** — ผู้ที่ขึ้นทะเบียน tool จาก server ภายนอกต้องเก็บ
+       ชื่อเดิมไว้ให้ audit ตามกลับไปได้ · รูปกลางของบันทึกนั้นรอ consumer รายแรกที่
+       pin `mcp/v1` (ADR-0027 · เหตุผลเดียวกับที่ ADR-0025 ไม่สร้าง field ให้ cost)"
+    - "`ToolId` unique ภายใน **tenant** ไม่ใช่ทั้งโลก — `server_id` ที่ใช้เป็น namespace
+       ก็ unique ภายใน tenant/workspace เหมือนกัน ขอบเขตจึงตรงกัน"

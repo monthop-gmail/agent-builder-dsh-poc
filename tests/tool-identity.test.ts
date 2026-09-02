@@ -3,6 +3,7 @@ import { resolve } from "node:path";
 import {
   BUILTIN_NAMESPACE,
   ToolIdCollisionError,
+  ToolIdUnmappableError,
   isToolId,
   toolIdFor,
   toolIdMap,
@@ -65,6 +66,38 @@ describe("internal name → wire ToolId", () => {
     expect(toolIdFor("web_search")).toBe("web.search");
     expect(toolIdFor("calculator")).toBe("math.evaluate");
     expect(toolIdFor("current_time")).toBe("time.now");
+  });
+
+  it("rule 2 — replaces one character at a time and never collapses runs", () => {
+    // `a__b` already satisfies the pattern, so collapsing to `a_b` buys
+    // nothing and invents collisions the input did not have.
+    expect(toolIdFor("a--b")).toBe(`${BUILTIN_NAMESPACE}.a__b`);
+    expect(toolIdFor("canva.list--comments")).toBe("canva.list__comments");
+  });
+
+  it("rule 3 — refuses to guess when a segment starts with a digit", () => {
+    // `2fa_setup` stays illegal however it is namespaced, because the LAST
+    // segment is the problem. ADR-0027 forbids inventing a prefix: two
+    // implementations that guessed differently would disagree about the id of
+    // one tool, which is the failure the whole rule set exists to stop.
+    expect(() => toolIdFor("canva.2fa_setup")).toThrow(ToolIdUnmappableError);
+    expect(() => toolIdFor("2fa_setup")).toThrow(ToolIdUnmappableError);
+
+    try {
+      toolIdFor("canva.2fa_setup");
+    } catch (error) {
+      expect((error as Error).message).toContain("Add an explicit mapping");
+    }
+  });
+
+  it("rule 5 — the map is invertible, so the original name survives", () => {
+    // Reversibility is not a separate mechanism: refusing collisions IS what
+    // makes it hold. An id can only have come from one name.
+    const names = listToolNames();
+    const ids = toolIdMap(names);
+    const back = new Map([...ids].map(([name, id]) => [id, name]));
+    expect(back.size).toBe(names.length);
+    for (const name of names) expect(back.get(ids.get(name) as string)).toBe(name);
   });
 
   it("sanitises the character sets real MCP servers actually use", () => {
