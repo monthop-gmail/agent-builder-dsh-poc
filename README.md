@@ -311,11 +311,33 @@ tests/                   manifest · policy · portability · conformance · ope
 - ก่อนทำ **P6 (Issue → PR)** ต้องคุยกับ `ai-web-harness` (L4, เจ้าของ workflow
   requirement→design→implement→test→review→fix) และ `devfactory-core` (L7, orchestration) ก่อน
 
-อ้างอิง: [ecosystem-brief](https://github.com/monthop-gmail/ecosystem-brief) ·
-[agent-builder-pi-poc](https://github.com/monthop-gmail/agent-builder-pi-poc) (Pi runtime, จะรวมกันภายหลังเป็น `agent-builder-poc`)
+### runtime ปลายทางที่ต่ออยู่
+
+แต่ละ target ต่อกับโปรเจกต์ข้างนอกคนละตัว — รู้ว่าอันไหนเป็นของใคร สำคัญตอนต้องไปอ่านต่อ
+หรือตอนของเขาเปลี่ยนแล้วของเราพัง
+
+| target | ต่อกับ | สถานะฝั่งเขา |
+|---|---|---|
+| `dsh` | [deepseek-ai/deepseek-harness](https://github.com/deepseek-ai/deepseek-harness) | developer preview — ประกาศเองว่าจะมี breaking change · ACP อยู่แค่ช่อง `alpha` |
+| `acp` | [Agent Client Protocol](https://agentclientprotocol.com) | spec กลาง ไม่ใช่ของ vendor ไหน — เหตุผลที่ adapter เขียนตาม wire ไม่ใช่ตาม SDK |
+| `pi` | [earendil-works/pi](https://github.com/earendil-works/pi) | `@earendil-works/pi-coding-agent` — pin exact version ไว้ |
+| `openai-compatible` | ไม่ผูกกับใคร | OpenAI-compatible chat completions ตัวไหนก็ได้ |
+
+ของที่ควรหยิบมาใช้แต่ยังไม่ได้ทำ: [`@earendil-works/pi-telemetry`](https://github.com/earendil-works/pi)
+— _"vendor-neutral telemetry contracts, reference adapter, conformance tests"_ ซึ่งคือปัญหา
+trace/audit contract ที่เราจะเจอตอนมี adapter เยอะขึ้น มีคนแก้ไว้แล้วและตั้งใจให้ vendor-neutral
+
+### repo ในระบบเดียวกัน
+
+[ecosystem-brief](https://github.com/monthop-gmail/ecosystem-brief) — แผนที่กลาง อ่านก่อนแตะ repo ไหน ·
+[agent-builder-pi-poc](https://github.com/monthop-gmail/agent-builder-pi-poc) — รวมเข้ามาเป็น target `pi` แล้ว
+เก็บไว้เป็นประวัติ ไม่ต้องแก้ต่อ
 
 ---
 
 ## ขอบเขต PoC (ยังไม่ทำ)
 
-UI · database · orchestration · sub-agent (P5) · `resume()` (interface มีแล้ว)
+UI · database · orchestration · sub-agent (P5) · Issue → PR (P6) · agent identity ฝั่ง MCP server
+
+`resume()` ทำแล้วผ่าน `--target acp` และ `--target dsh` — runtime อื่นยัง throw
+เพราะ session ของมันไม่ข้าม process
