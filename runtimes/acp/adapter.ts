@@ -55,6 +55,27 @@ export interface AcpLauncher {
   prepare(compiled: CompiledAgent): Promise<AgentLaunch>;
 }
 
+/**
+ * The environment the agent process gets.
+ *
+ * An agent can refuse to start over a variable it merely inherited. Claude
+ * Code, for one, aborts when `CLAUDECODE` is set, because that means it is
+ * being launched from inside another Claude Code session and the two would
+ * fight over the same runtime. The variable had nothing to do with us; it was
+ * simply in the environment we passed along.
+ *
+ * So the operator can name what to drop. Not scrubbed by default: most agents
+ * need most of the environment, and guessing which parts are safe to remove
+ * is how a target stops working for a reason nobody can find.
+ */
+export function childEnv(): NodeJS.ProcessEnv {
+  const drop = (process.env.ACP_AGENT_ENV_UNSET ?? "").split(/[,\s]+/).filter(Boolean);
+  if (!drop.length) return process.env;
+  const env = { ...process.env };
+  for (const name of drop) delete env[name];
+  return env;
+}
+
 /** The default: name the agent in the environment, configure nothing. */
 export class EnvLauncher implements AcpLauncher {
   async prepare(): Promise<AgentLaunch> {
@@ -66,7 +87,7 @@ export class EnvLauncher implements AcpLauncher {
       );
     }
     const raw = process.env.ACP_AGENT_ARGS ?? "";
-    return { command, args: raw.split(" ").filter(Boolean) };
+    return { command, args: raw.split(" ").filter(Boolean), env: childEnv() };
   }
 }
 

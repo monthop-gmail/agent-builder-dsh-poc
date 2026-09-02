@@ -19,6 +19,11 @@
 [`contract-stability.md`](contract-stability.md) — อะไร freeze แล้ว อะไรนับเป็น breaking
 และบังคับด้วย `tests/compatibility/` กับ `tests/contract-stability.test.ts`
 
+## harness ที่ต่อได้
+
+[`harness-integration.md`](harness-integration.md) — harness ตัวไหนเข้าทางไหน
+และแต่ละข้อยืนยันถึงไหน (รันจริง / อ่านเอกสารเขา)
+
 ## ที่เหลือ
 
 | ไฟล์ | |

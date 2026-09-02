@@ -5,7 +5,7 @@ import { join, resolve } from "node:path";
 import { loadManifest } from "../builder/loader.js";
 import { validateManifest, type AgentManifest } from "../builder/validator.js";
 import { compileManifest } from "../builder/compiler.js";
-import { AcpRuntime } from "../runtimes/acp/adapter.js";
+import { AcpRuntime, childEnv } from "../runtimes/acp/adapter.js";
 import { RunAborted } from "../builder/errors.js";
 import { compileVector } from "./conformance/vectors.js";
 import type { ApprovalRequest, TraceEvent } from "../builder/types.js";
@@ -160,6 +160,29 @@ describe("AcpRuntime", () => {
     } finally {
       await handle.dispose();
     }
+  });
+
+  it("drops the variables the operator named from the agent's environment", () => {
+    // Observed against @zed-industries/claude-code-acp: it refuses to start
+    // when CLAUDECODE is set, because that means it is being launched from
+    // inside another Claude Code session. The variable had nothing to do with
+    // this adapter — it was simply inherited.
+    process.env.ACP_CHILD_ENV_PROBE = "present";
+    process.env.ACP_AGENT_ENV_UNSET = "ACP_CHILD_ENV_PROBE";
+    try {
+      expect(childEnv().ACP_CHILD_ENV_PROBE).toBeUndefined();
+      // The rest of the environment still has to reach the agent.
+      expect(childEnv().PATH).toBe(process.env.PATH);
+    } finally {
+      delete process.env.ACP_CHILD_ENV_PROBE;
+      delete process.env.ACP_AGENT_ENV_UNSET;
+    }
+  });
+
+  it("passes the environment through untouched when nothing is named", () => {
+    // Scrubbing by default would break targets that need what it removed, for
+    // a reason nobody could find.
+    expect(childEnv()).toBe(process.env);
   });
 
   it("says which variable names the agent when it is not configured", async () => {
