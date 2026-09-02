@@ -21,12 +21,47 @@ DeepSeek   Gemini   Claude   agent อื่น    (ตัวที่ยัง�
 
 | harness | เข้าทาง | คำสั่ง | ยืนยันถึงไหน |
 |---|---|---|---|
-| **DeepSeek Harness** | `dsh` (preset) หรือ `acp` | `dsh --profile acp` | 🟢 **รันจบวง** — prompt, tool, resume ข้าม process |
-| **Claude Code** | `acp` | `claude-code-acp` ([`@zed-industries/claude-code-acp`](https://www.npmjs.com/package/@zed-industries/claude-code-acp)) | 🟡 **initialize + session/new + session/update ผ่าน** · `session/prompt` ต้องใช้ credential ของ Anthropic ซึ่งไม่มี |
-| **Gemini CLI** | `acp` | `gemini --acp` | ⚪ อ่านจาก [`docs/cli/acp-mode.md`](https://github.com/google-gemini/gemini-cli/blob/main/docs/cli/acp-mode.md) ของเขา ยังไม่ได้รัน |
+| **DeepSeek Harness** | `dsh` (preset) หรือ `acp` | `dsh --profile acp` | 🟢 **รันจบวง** — prompt · tool · resume ข้าม process |
+| **opencode** | `acp` | `opencode acp` | 🟢 **รันจบวง** — prompt · **resume ข้าม process** |
 | **Pi** | `pi` (library) | — | 🟢 รันจบวง |
+| **Claude Code** | `acp` | `claude-code-acp` ([`@zed-industries/claude-code-acp`](https://www.npmjs.com/package/@zed-industries/claude-code-acp)) | 🟡 initialize · session/new · session/update ผ่าน · `session/prompt` ต้องใช้ credential ของ Anthropic ซึ่งไม่มี |
+| **Gemini CLI** | `acp` | `gemini --acp` | ⚪ อ่านจาก [`docs/cli/acp-mode.md`](https://github.com/google-gemini/gemini-cli/blob/main/docs/cli/acp-mode.md) ของเขา ยังไม่ได้รัน |
+| **Kimi Code CLI** | `acp` | `kimi acp` | ⚪ อ่านจาก [`docs/en/reference/kimi-acp.md`](https://github.com/MoonshotAI/kimi-code/blob/main/docs/en/reference/kimi-acp.md) — ประกาศว่า implement core 3/3 · session 11/11 |
 | **OpenAI Codex** | ยังไม่มีทางตรง | — | ⚪ ไม่พูด ACP · DSH ห่อมันเป็น subagent (`dsh-subagent-codex`) |
 | **Qwen Code** | ⚠️ **ยังไม่ได้** | `qwen serve` = ACP บน **HTTP+SSE** | ⚪ client ของเรารองรับแค่ **stdio** |
+
+> เทียบกับรายชื่อ [best AI coding agent](https://www.kimi.ai/resources/best-ai-coding-agent):
+> ในนั้นมี CLI จริง 5 ตัว — Claude Code · Codex · Gemini CLI · Kimi Code · opencode
+> **4 ใน 5 เข้าทาง `acp` ได้** เหลือ Codex ตัวเดียวที่ไม่พูด ACP
+> ที่เหลือในหน้านั้น (Cursor · Windsurf · Replit · Grok Build · Devin) เป็น IDE หรือ web app
+> ไม่ใช่ harness ที่ขับจาก stdio ได้
+
+## opencode: vendor ที่สาม รันจบวงจริง
+
+```
+$ run --target acp --input "ตอบสั้น ๆ ว่าคุณคือ agent อะไร"
+  ฉันคือ opencode — AI coding agent ที่ช่วยทำงาน software engineering ...
+  (target: acp · session: ses_f9dcaef56ffeiuLUNRof5aVgRL)
+
+$ run --target acp --resume ses_f9dcaef56ffeiuLUNRof5aVgRL \
+      --input "เมื่อกี้ผมถามอะไรไป"
+  · resumed session ses_f9dcaef56ffeiuLUNRof5aVgRL
+  คุณถามว่าฉันคือ agent อะไร
+```
+
+process ที่สองไม่มีอะไรร่วมกับตัวแรกนอกจาก session id กับ manifest —
+**`resume()` จึงไม่ใช่ของเฉพาะ DSH แต่เป็นคุณสมบัติของโปรโตคอล** ซึ่งเป็นสิ่งที่ §12 อ้างไว้
+และเพิ่งได้หลักฐานจาก implementation ที่สอง
+
+### ข้อควรรู้ตอนติดตั้ง
+
+`opencode-ai` มี postinstall ที่ดึง binary จริงลงมา ถ้าติดตั้งด้วย `--ignore-scripts`
+(หรือ pnpm ซึ่งไม่รัน postinstall โดยปริยาย) ตัว agent จะขึ้น error แล้วค้าง — ไม่ตอบ ACP
+รันเองหนึ่งครั้ง:
+
+```bash
+cd node_modules/opencode-ai && node postinstall.mjs
+```
 
 ## สิ่งที่การต่อ Claude Code พิสูจน์
 
