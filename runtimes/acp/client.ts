@@ -16,6 +16,14 @@ import { createInterface, type Interface } from "node:readline";
 
 export type JsonRpcId = number | string;
 
+/** Indent an agent's stderr so it reads as quoted output, not as our own. */
+function indent(text: string): string {
+  return text
+    .split("\n")
+    .map((line) => `    ${line}`)
+    .join("\n");
+}
+
 export interface AgentRequest {
   id: JsonRpcId;
   method: string;
@@ -32,7 +40,15 @@ export interface AcpClientOptions {
   /** Requests the agent makes of us, e.g. `session/request_permission`. */
   onRequest?(request: AgentRequest): Promise<unknown>;
   onStderr?(chunk: string): void;
-  /** Bound on every call, so a hung agent fails the run instead of it. */
+  /**
+   * Bound on every call, so a hung agent fails the run instead of it.
+   *
+   * The default is generous because a coding agent's first turn is not a chat
+   * completion: measured, Gemini CLI took 58 seconds to answer a one-line
+   * prompt, and Antigravity's own headless mode waits five minutes by
+   * default. A tight bound here turns a slow agent into a failed run.
+   * `ACP_REQUEST_TIMEOUT_MS` overrides it.
+   */
   requestTimeoutMs?: number;
 }
 
@@ -52,7 +68,9 @@ export class AcpClient {
   #stderrTail = "";
 
   constructor(private readonly options: AcpClientOptions) {
-    this.#timeoutMs = options.requestTimeoutMs ?? 120_000;
+    const fromEnv = Number(process.env.ACP_REQUEST_TIMEOUT_MS);
+    this.#timeoutMs =
+      options.requestTimeoutMs ?? (Number.isFinite(fromEnv) && fromEnv > 0 ? fromEnv : 300_000);
     this.#child = spawn(options.command, options.args ?? [], {
       cwd: options.cwd,
       env: options.env,
@@ -153,7 +171,21 @@ export class AcpClient {
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         this.#pending.delete(id);
-        reject(new Error(`acp: '${method}' timed out after ${this.#timeoutMs}ms`));
+        // A precondition the agent refuses to start under looks exactly like
+        // a slow model from here: no error response, no notification, just
+        // silence. Gemini CLI does this when the working directory is not
+        // trusted — it prints the reason to stderr and never answers the
+        // prompt — so the tail goes in the message rather than being left
+        // somewhere the caller has to think to look.
+        reject(
+          new Error(
+            `acp: '${method}' timed out after ${this.#timeoutMs}ms — the agent never answered.` +
+              (this.#stderrTail
+                ? `\n  its stderr said:\n${indent(this.#stderrTail.trim())}`
+                : `\n  it printed nothing to stderr; check whether it is waiting on a` +
+                  ` precondition such as workspace trust, sign-in or a permission prompt.`),
+          ),
+        );
       }, this.#timeoutMs);
       this.#pending.set(id, { resolve, reject, timer });
       this.#send({ jsonrpc: "2.0", id, method, params });

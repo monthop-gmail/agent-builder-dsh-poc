@@ -45,6 +45,9 @@ const ask = (method, params) =>
   });
 
 async function handle(method, params) {
+  // `<method>-hang` never answers, standing in for an agent blocked on a
+  // precondition it does not report through the protocol.
+  if (failMethod === `${method}-hang`) return new Promise(() => {});
   if (failMethod && method === failMethod) throw new Error(`stub refuses ${method}`);
 
   if (method === "initialize") {
