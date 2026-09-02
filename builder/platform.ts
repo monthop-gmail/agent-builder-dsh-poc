@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import { parse as parseYaml } from "yaml";
 import { z } from "zod";
+import { toolIdMap } from "./tool-ids.js";
 
 /**
  * The three-party rule, made real.
@@ -176,9 +177,33 @@ export interface EffectivePolicy {
 const union = (a: string[], b: string[]): string[] => [...new Set([...a, ...b])].sort();
 
 /**
+ * ToolIds back to the internal names this registry uses.
+ *
+ * An id that matches nothing we have is KEPT as-is rather than dropped: it may
+ * name a tool that arrives later from an MCP server, and `admitLateTools()`
+ * will check it then. Dropping it here would turn "we cannot see it yet" into
+ * "it was never denied".
+ */
+function toInternalNames(ids: string[], wireId?: Map<string, string>): string[] {
+  if (!wireId) return ids;
+  const back = new Map([...wireId].map(([name, id]) => [id, name]));
+  return ids.map((id) => back.get(id) ?? id);
+}
+
+/**
  * Combine the parties. `platform` absent means no ceiling was supplied — the
  * agent's own policy stands alone, which is what every build did before this
  * file existed.
+ */
+/**
+ * Compare in ToolId space, answer in internal names.
+ *
+ * A `profile/v1` instance speaks `tool/v1` `ToolId`s by definition — it comes
+ * from the platform, which has never heard of this registry's internal names.
+ * Comparing the two directly is comparing different vocabularies and calling
+ * the mismatch a policy decision (#59 option A). So every name is mapped to
+ * its wire id first, the ceiling is applied there, and what comes back out is
+ * internal names again, because that is what the Tool Registry answers to.
  */
 export function combinePolicies(
   agent: AgentPolicyView,
@@ -196,6 +221,7 @@ export function combinePolicies(
 
   const ceiling = platform.toolsAllow;
   const requested = agent.toolsRequested;
+  const wireId = requested ? toolIdMap(requested) : undefined;
 
   // Intersection — and the asymmetry is the point. A tool the profile did not
   // allow cannot be reached by asking for it, but a tool the profile allows
@@ -213,15 +239,24 @@ export function combinePolicies(
     toolsAllow = undefined;
   } else {
     const allowed = new Set(ceiling);
-    toolsAllow = requested.filter((t) => allowed.has(t));
-    droppedByCeiling = requested.filter((t) => !allowed.has(t));
+    const permitted = (name: string) => allowed.has(wireId?.get(name) ?? name);
+    toolsAllow = requested.filter(permitted);
+    droppedByCeiling = requested.filter((t) => !permitted(t));
   }
+
+  // The agent's deny list is written in manifest names; the profile's is
+  // written in ToolIds. Both are translated to internal names so the union is
+  // one vocabulary — a deny that silently applied to nothing because it was
+  // spelled in the other language is exactly the fail-open ADR-0026 rule 4
+  // warns about.
+  const platformDenyInternal = toInternalNames(platform.toolsDeny, wireId);
+  const platformHumanInternal = toInternalNames(platform.requireHumanFor, wireId);
 
   return {
     toolsAllow,
-    denyTools: union(agent.denyTools, platform.toolsDeny),
+    denyTools: union(agent.denyTools, platformDenyInternal),
     denyCapabilities: union(agent.denyCapabilities, platform.denyCapabilities),
-    requireHumanFor: union(agent.requireHumanFor, platform.requireHumanFor),
+    requireHumanFor: union(agent.requireHumanFor, platformHumanInternal),
     droppedByCeiling,
     profile: { id: platform.profileId, checksum: platform.checksum },
   };
@@ -306,6 +341,7 @@ export function assertBindingValid(
   // "wrong namespace".
   const ceiling = platform.toolsAllow;
   const requested = agent.toolsRequested;
+  const wireId = requested ? toolIdMap(requested) : undefined;
   if (ceiling?.length && requested?.length && !effective.toolsAllow?.length) {
     throw new ProfileNamespaceError(platform.profileId, ceiling, requested);
   }

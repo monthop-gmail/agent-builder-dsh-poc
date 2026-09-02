@@ -1,10 +1,13 @@
-# A synthetic profile/v1 instance written in THIS repo's tool vocabulary.
+# A synthetic profile/v1 instance — and a VALID one.
 #
-# The real `coding-agent.profile.yaml` next to it is vendored verbatim and
-# speaks `tool/v1` ToolIds (`github.pr.merge`, `fs.file.read`); ours are
-# registry names (`github.merge`, `calculator`). The gap between the two is a
-# real finding, tested for on its own — this file exists so the combination
-# rules can be tested without that gap standing in the way.
+# It speaks `tool/v1` ToolIds, because that is the only thing a profile can
+# speak: it comes from the platform, which has never heard of this registry's
+# internal names. `time.now` is what `current_time` is called on the wire
+# (`builder/tool-ids.ts`), and the ceiling is applied in that vocabulary.
+#
+# It used to use internal names and therefore did not validate — that was the
+# gap #59 was opened about, and closing it is what let this repo pin
+# `tool/v1` and `agent/v1`.
 profile_id: narrow-reviewer
 display_name: Narrow Reviewer
 description: >-
@@ -21,7 +24,7 @@ tools:
   allow:
     - github.read
     - github.comment
-    - current_time
+    - time.now
   deny:
     - github.merge
 

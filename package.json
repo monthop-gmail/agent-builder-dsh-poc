@@ -15,7 +15,8 @@
     "docs:capabilities": "tsx scripts/emit-capability-matrix.ts",
     "compat:baseline": "tsx scripts/emit-compatibility-baseline.ts",
     "conformance": "tsx conformance/payload-check.ts",
-    "conformance:drift": "tsx conformance/drift-check.ts"
+    "conformance:drift": "tsx conformance/drift-check.ts",
+    "probe:mcp": "tsx probe-mcp.ts"
   },
   "dependencies": {
     "@earendil-works/pi-ai": "0.84.4",
