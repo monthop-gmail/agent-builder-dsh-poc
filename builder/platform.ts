@@ -81,12 +81,11 @@ export interface PlatformPolicy {
   /**
    * sha256 of the profile bytes.
    *
-   * Recorded so the effective policy can be traced back to the exact file it
-   * came from. It is NOT folded into `manifestChecksum` yet: ADR-0022 warns
-   * that a deny-list compiled into a build artifact has to live inside that
-   * artifact's identity, and doing that properly waits on the answer to
-   * `agent-platform#52`. Carrying the checksum without claiming it is part of
-   * identity keeps the gap visible instead of papering over it.
+   * Folded into `CompiledAgent.buildIdentity` — ADR-0022 warned that a
+   * deny-list compiled into a build artifact has to live inside that
+   * artifact's identity, and ADR-0025 settled how. It is deliberately NOT in
+   * `manifestChecksum`, which answers a different question: which source this
+   * came from, not which agent it is.
    */
   checksum: string;
   source: string;
@@ -161,8 +160,9 @@ export const AGENT_POLICY_FIELD_MAP: ReadonlyArray<{ ours: string; theirs: strin
 
 export interface EffectivePolicy {
   /**
-   * Tools that survive both parties. `undefined` when neither side stated an
-   * allowlist, which means the Tool Registry's own answer stands.
+   * Tools that survive both parties. `undefined` when the agent asked for
+   * none — a ceiling never grants, so a wide profile over a silent manifest
+   * still yields nothing.
    */
   toolsAllow?: string[];
   denyTools: string[];
@@ -206,7 +206,11 @@ export function combinePolicies(
   if (ceiling === undefined) {
     toolsAllow = requested;
   } else if (requested === undefined) {
-    toolsAllow = ceiling;
+    // A ceiling never GRANTS. An agent that asked for nothing gets nothing,
+    // however wide the profile is — handing over `tools.allow` here would
+    // turn "เพดาน ไม่ใช่การอนุญาต" inside out and give an agent tools its
+    // manifest never mentions.
+    toolsAllow = undefined;
   } else {
     const allowed = new Set(ceiling);
     toolsAllow = requested.filter((t) => allowed.has(t));
@@ -221,6 +225,41 @@ export function combinePolicies(
     droppedByCeiling,
     profile: { id: platform.profileId, checksum: platform.checksum },
   };
+}
+
+/**
+ * Raised when a profile's named allowlist matches none of the tools the agent
+ * asked for — ADR-0026 rule 3.
+ *
+ * The reading is not "this agent may use nothing". It is "this profile was
+ * written for a different tool namespace", and the two must not look alike:
+ * a ceiling that silently denies everything looks exactly like a ceiling
+ * doing its job. ADR-0026 chose to make the mistake loud, and the reason it
+ * gave is worth keeping in view — the dangerous half is the OTHER direction:
+ *
+ *   > ด้านที่อันตรายกว่าคือ `deny` ที่ไม่ตรงแล้วเงียบ ทำให้ "profile นี้ห้าม merge"
+ *   > กลายเป็นความเชื่อที่ไม่จริงโดยไม่มีอะไรบอก
+ *
+ * A name-based `deny` only ever protects the namespace it names (rule 4).
+ * Nothing here can make `github.pr.merge` guard a tool called
+ * `github.merge` — so rejecting the binding is how we stop anyone believing
+ * it did.
+ */
+export class ProfileNamespaceError extends Error {
+  constructor(
+    readonly profileId: string,
+    readonly ceiling: string[],
+    readonly requested: string[],
+  ) {
+    super(
+      `policy: profile '${profileId}' allows none of the tools this agent asked for — ` +
+        `it allows [${ceiling.join(", ")}], the agent asked for [${requested.join(", ")}]. ` +
+        `A named ceiling only governs the namespace it names, so this is a profile written ` +
+        `for different tool ids, not a profile that denies everything. Rejecting the binding ` +
+        `rather than compiling an agent with no tools.`,
+    );
+    this.name = "ProfileNamespaceError";
+  }
 }
 
 /** Raised when a manifest and a profile cannot be bound at all. */
@@ -259,6 +298,17 @@ export function assertBindingValid(
   const conflicts = [...required].filter((c) => denied.has(c)).sort();
 
   if (conflicts.length) throw new PolicyBindingError(platform.profileId, conflicts);
+
+  // ADR-0026 rule 3. Deliberately narrow: an EMPTY `tools.allow` is a real
+  // ceiling that grants nothing (rule 1) and must keep working, and an agent
+  // that asked for no tools gives no evidence either way. Only a non-empty
+  // allowlist that overlaps a non-empty request in nothing at all says
+  // "wrong namespace".
+  const ceiling = platform.toolsAllow;
+  const requested = agent.toolsRequested;
+  if (ceiling?.length && requested?.length && !effective.toolsAllow?.length) {
+    throw new ProfileNamespaceError(platform.profileId, ceiling, requested);
+  }
 }
 
 /* ---------- the taxonomy we are allowed to name ---------- */

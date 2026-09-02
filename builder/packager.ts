@@ -4,15 +4,22 @@ import type { CompiledAgent } from "./types.js";
 /**
  * Packager: CompiledAgent + target -> a portable, inspectable artifact.
  *
- * `manifestChecksum` is carried through untouched. Two packages built from
- * one manifest for different targets must agree on it and on `capabilities`
- * — that equality IS the portability guarantee, and the test asserts it.
+ * `manifestChecksum` and `buildIdentity` are carried through untouched. Two
+ * packages built from one manifest for different targets must agree on both
+ * and on `capabilities` — that equality IS the portability guarantee, and the
+ * test asserts it.
+ *
+ * The two checksums answer different questions and a package needs both:
+ * `manifestChecksum` says which source this came from, `buildIdentity` says
+ * which agent it actually is once the model chain and the platform ceiling
+ * are folded in (agent-platform ADR-0023 rule 3 · ADR-0025).
  */
 export interface AgentPackage {
   formatVersion: 1;
   target: string;
   builtAt: string;
   manifestChecksum: string;
+  buildIdentity: string;
   agent: {
     name: string;
     version: string;
@@ -39,6 +46,7 @@ export function packageAgent(compiled: CompiledAgent, target: string): AgentPack
     target,
     builtAt: new Date().toISOString(),
     manifestChecksum: compiled.manifestChecksum,
+    buildIdentity: compiled.buildIdentity,
     agent: {
       name: compiled.name,
       version: compiled.version,

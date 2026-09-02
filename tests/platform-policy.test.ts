@@ -8,6 +8,7 @@ import {
   CANONICAL_SCOPE,
   CAPABILITY_IDS,
   PolicyBindingError,
+  ProfileNamespaceError,
   combinePolicies,
   loadPlatformProfile,
   type AgentPolicyView,
@@ -163,11 +164,13 @@ describe("provenance", () => {
       profileChecksum: platform.checksum,
     });
 
-    // The gap ADR-0022 warned about and agent-platform#52 has to close: the
-    // ceiling changed what the agent can do, and the checksum did not move.
+    // The gap ADR-0022 warned about, now closed by ADR-0025: the ceiling
+    // changes what the agent can do, so it has to change what the agent IS.
+    // `manifestChecksum` still cannot see it — that is correct, it answers a
+    // different question — and `buildIdentity` must.
     const other = compileManifest(manifest(), "sum");
     expect(built.agent.manifestChecksum).toBe(other.agent.manifestChecksum);
-    expect(built.agent.tools.length).not.toBe(other.agent.tools.length);
+    expect(built.agent.buildIdentity).not.toBe(other.agent.buildIdentity);
   });
 });
 
@@ -199,29 +202,64 @@ describe("capability/v1 v1.1.0", () => {
   });
 });
 
-describe("the vendored profile — what actually happens today", () => {
-  it("shares no tool vocabulary with our Tool Registry", async () => {
+describe("a ceiling from the wrong namespace — ADR-0026 rule 3", () => {
+  it("rejects the binding instead of compiling an agent with no tools", async () => {
     const platform = await loadPlatformProfile(fixture("coding-agent.profile.yaml"));
-    const built = compileManifest(manifest(), "sum", { platform });
 
-    // Not a bug in the rules — a finding. `profiles/coding-agent` speaks
-    // `tool/v1` ToolIds (`github.pr.merge`, `fs.file.read`) and this repo's
-    // registry speaks its own names (`github.merge`). Under intersection that
-    // means EVERY tool is dropped, and the agent still builds.
-    //
-    // Left visible on purpose: aligning the two vocabularies is real work
-    // that has not been done, and a test that quietly passed would hide it.
+    // `profiles/coding-agent` speaks `tool/v1` ToolIds (`github.pr.merge`,
+    // `fs.file.read`); this repo's registry speaks its own (`github.merge`).
+    // Until 2026-09-03 this compiled to an agent with zero tools and said
+    // nothing. ADR-0026 rule 3 made that a rejection, and gave the reason:
+    // a silent deny-all is indistinguishable from a ceiling doing its job.
+    expect(() => compileManifest(manifest(), "sum", { platform })).toThrow(
+      ProfileNamespaceError,
+    );
+
+    try {
+      compileManifest(manifest(), "sum", { platform });
+    } catch (error) {
+      expect((error as Error).message).toContain("different tool ids");
+      expect((error as ProfileNamespaceError).ceiling).toContain("github.issue.read");
+      expect((error as ProfileNamespaceError).requested).toContain("github.merge");
+    }
+  });
+
+  it("still honours a ceiling that deliberately allows nothing", async () => {
+    const platform = await narrow();
+
+    // Rule 1: `tools.allow: []` is a real ceiling granting nothing, and is a
+    // different statement from having no allowlist. It must NOT be mistaken
+    // for the namespace mistake above.
+    const built = compileManifest(manifest(), "sum", { platform: { ...platform, toolsAllow: [] } });
     expect(built.agent.tools).toEqual([]);
-    expect(built.droppedByCeiling.sort()).toEqual([
-      "github.comment",
-      "github.merge",
-      "github.read",
-    ]);
+    expect(built.droppedByCeiling.length).toBeGreaterThan(0);
+  });
 
-    // The one thing that DOES line up is the rule itself: their profile denies
-    // merging with the comment "merge เป็นของคน ไม่ใช่ของ agent", and our
-    // example manifest forbids the same act under a different name.
+  it("does not reject when the agent asked for no tools at all", async () => {
+    const platform = await loadPlatformProfile(fixture("coding-agent.profile.yaml"));
+    const toolless = manifest({ tools: undefined, mcp: { servers: ["filesystem"] } });
+
+    // No request, no evidence of a mismatch. Rejecting here would punish a
+    // manifest for something it never said.
+    let built!: ReturnType<typeof compileManifest>;
+    expect(() => (built = compileManifest(toolless, "sum", { platform }))).not.toThrow();
+
+    // And the ceiling must not have GRANTED anything either — a profile is a
+    // ceiling, not a permission. Handing over `tools.allow` here would give
+    // the agent nine tools its manifest never mentions.
+    expect(built.agent.tools).toEqual([]);
+  });
+
+  it("names the same act under two vocabularies — which is the point", async () => {
+    const platform = await loadPlatformProfile(fixture("coding-agent.profile.yaml"));
+
+    // Their profile denies merging with the comment "merge เป็นของคน ไม่ใช่
+    // ของ agent"; our example manifest forbids the same act under a different
+    // name. The rule matched long before the vocabulary did — and ADR-0026
+    // rule 4 is precisely that a named deny protects only the namespace it
+    // names, so `github.pr.merge` never guarded our `github.merge`.
     expect(platform.toolsDeny).toContain("github.pr.merge");
+    expect(platform.toolsDeny).not.toContain("github.merge");
   });
 });
 

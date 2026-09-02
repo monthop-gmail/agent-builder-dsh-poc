@@ -269,7 +269,12 @@ async function main(): Promise<number> {
     out(`\nTarget     ${effectiveTarget}`);
     out(`\nModel      ${agent.model.requested} → ${agent.model.id}  [${agent.model.route}] ${agent.model.baseUrl}`);
     out(`\nAutonomy   level ${agent.autonomy.level} — may self-invoke: ${agent.autonomy.allowedEffects.join(", ") || "nothing"}`);
-    out(`\nChecksum   ${agent.manifestChecksum}\n`);
+    // Two lines because they answer two questions: which source, and which
+    // agent. Printing only the first is how the gap that became
+    // agent-platform#52 stayed invisible for as long as it did.
+    out(`\nManifest   ${agent.manifestChecksum}\n`);
+    out(`Identity   ${agent.buildIdentity}`);
+    out(agent.policySource ? `  (ceiling: ${agent.policySource.profileId})\n` : `\n`);
     out(`\nTools granted\n`);
     for (const t of agent.tools) {
       const gate = agent.approvalRequired.includes(t.name) ? "  ⚠ needs approval" : "";

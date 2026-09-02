@@ -2,6 +2,7 @@ import type { AgentManifest } from "./validator.js";
 import type { CompiledAgent, ModelBinding } from "./types.js";
 import { resolveCapabilities } from "./resolver.js";
 import { resolveModelChain } from "./registry/models.js";
+import { computeBuildIdentity } from "./identity.js";
 import { autonomyFor, decideCapabilities } from "./registry/policy.js";
 import {
   assertBindingValid,
@@ -86,6 +87,15 @@ export function compileManifest(
     ...ModelBinding[],
   ];
 
+  const policy = {
+    forbidden: effective.denyTools,
+    humanApproval: effective.requireHumanFor,
+    deniedCapabilities: effective.denyCapabilities,
+  };
+  const policySource = effective.profile
+    ? { profileId: effective.profile.id, profileChecksum: effective.profile.checksum }
+    : undefined;
+
   return {
     agent: {
       name: manifest.metadata.name,
@@ -105,21 +115,16 @@ export function compileManifest(
       // later (`admitLateTools`), so carrying the agent's own list here would
       // let a ceiling-denied tool in through the one door compile time cannot
       // see.
-      policy: {
-        forbidden: effective.denyTools,
-        humanApproval: effective.requireHumanFor,
-        deniedCapabilities: effective.denyCapabilities,
-      },
-      ...(effective.profile
-        ? {
-            policySource: {
-              profileId: effective.profile.id,
-              profileChecksum: effective.profile.checksum,
-            },
-          }
-        : {}),
+      policy,
+      ...(policySource ? { policySource } : {}),
       audit: manifest.spec.audit?.required ?? false,
       manifestChecksum,
+      buildIdentity: computeBuildIdentity({
+        manifestChecksum,
+        chain: [model, ...modelFallbacks],
+        policy,
+        policySource,
+      }),
     },
     droppedByPolicy: decision.forbidden,
     droppedByCeiling: effective.droppedByCeiling,
