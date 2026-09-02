@@ -1,0 +1,121 @@
+$schema: https://json-schema.org/draft/2020-12/schema
+$id: https://schemas.agent-platform.internal/agent/v1/agent.schema.yaml
+title: Agent
+description: >-
+  นิยามของ agent หนึ่งตัว — ตัวตน บทบาท สิ่งที่ใช้ได้ และกรอบอำนาจ
+  agent ไม่ผูกกับ provider ตัวใดตัวหนึ่ง การเลือกว่าใครรันเป็นหน้าที่ของ routing ตาม capability
+
+type: object
+required: [agent_id, tenant_id, workspace_id, name, instructions]
+properties:
+  agent_id:
+    $ref: https://schemas.agent-platform.internal/identity/v1/identity.schema.yaml#/$defs/AgentId
+  tenant_id:
+    $ref: https://schemas.agent-platform.internal/identity/v1/identity.schema.yaml#/$defs/TenantId
+  workspace_id:
+    $ref: https://schemas.agent-platform.internal/identity/v1/identity.schema.yaml#/$defs/WorkspaceId
+  name:
+    type: string
+  role:
+    type: string
+    description: บทบาทสั้น ๆ เช่น `security-analyst` — ใช้ผูกกับ policy profile
+  instructions:
+    type: string
+    description: >-
+      คำสั่งประจำตัว — เป็น configuration ไม่ใช่ที่เก็บ credential หรือข้อมูลลับ
+  capability_requirement:
+    $ref: https://schemas.agent-platform.internal/capability/v1/requirement.schema.yaml
+    description: >-
+      agent บอกว่าต้องการอะไร ไม่ใช่ระบุ provider — ADR-0009
+      ถ้าจำเป็นต้อง pin provider จริง ให้ใช้ `constraints.pin_provider` และเขียนเหตุผลกำกับ
+  tools:
+    type: array
+    description: tool ที่ agent นี้ **ขอ** ใช้ — การอนุญาตจริงเป็นของ policy
+    items:
+      $ref: https://schemas.agent-platform.internal/tool/v1/tool.schema.yaml#/$defs/ToolId
+  mcp_servers:
+    type: array
+    items:
+      $ref: https://schemas.agent-platform.internal/identity/v1/identity.schema.yaml#/$defs/Id
+  policy_profile:
+    type: string
+    description: ชื่อชุด policy ที่ใช้กับ agent นี้ — ดู profiles/
+  policy:
+    type: object
+    additionalProperties: false
+    description: >-
+      **ข้อจำกัดที่ agent ตัวนี้กำหนดให้ตัวเอง — ตัดออกได้อย่างเดียว**
+      ([ADR-0022](../../../decisions/0022-agent-may-narrow-its-own-scope.md))
+
+      `profile/v1` เขียนกฎไว้ว่า *"สิทธิ์จริงคือส่วนที่ profile, agent และ policy ของ tenant
+      ตกลงตรงกันทั้งสามฝ่าย ค่าที่กว้างที่สุดชนะไม่ได้"* แต่เดิมฝ่าย agent มีแต่ `tools`
+      `capability_requirement` และ `policy_profile` ซึ่ง **ทั้งสามคือการขอ** — ไม่มีที่ให้เขียนว่า
+      *"ถึงเพดานจะเปิดให้ แต่ agent ตัวนี้ห้ามแตะ"* · บล็อกนี้คือปากเสียงที่ขาดไป
+
+      🔒 **ไม่มี `allow` ทุกชนิดโดยเจตนา** — ถ้า agent เขียน `allow` เองได้ กฎ *"กว้างที่สุด
+      ชนะไม่ได้"* จะถูกละเมิดทันที และ agent จะผ่อนข้อจำกัดของ tenant ได้ = guardrail
+      ไม่มีความหมาย · **การที่บล็อกนี้ตัดออกได้อย่างเดียวโดยนิยาม คือสิ่งที่ทำให้มันปลอดภัยพอจะมี**
+      · `additionalProperties: false` กัน `allow` ที่ถูกเติมเข้ามาภายหลังแบบเงียบ ๆ
+
+      🔒 **ไม่มี `authority_map`** — การ map `action_risk → authority` เป็นของ tenant
+      ([ADR-0010](../../../decisions/0010-risk-approval-taxonomy.md)) ถ้า agent เขียนเองได้
+      มันจะลดระดับผู้อนุมัติของตัวเองได้
+
+      **กฎการรวมที่ implementation ต้องบังคับ — JSON Schema ตรวจให้ไม่ได้:**
+
+      · `allow` รวมแบบ **intersection** — `profile.tools.allow` ∩ `agent.tools`
+
+      · `deny` รวมแบบ **union** — deny ของฝ่ายใดก็ตามชนะเสมอ ไม่มีใครขยายสิ่งที่อีกฝ่ายปิด
+
+      · `required(agent) ∪ required(profile)` ต้อง**ไม่ตัด**กับ deny ของฝ่ายใดเลย —
+      ถ้าตัดกัน การผูก agent เข้ากับ profile นั้น **invalid ให้ reject ไม่ใช่ลดให้เงียบ ๆ**
+      (agent ที่ต้องการ `shell` ใต้ profile ที่ปิด `shell` ไม่ใช่ agent ที่รันแบบจำกัด
+      แต่คือ agent ที่รันไม่ได้)
+
+      ⚠️ ถ้าบล็อกนี้ถูก compile ลงไปในสิ่งที่ build แล้ว **มันต้องอยู่ใน identity ของสิ่งนั้น**
+      ([ADR-0023](../../../decisions/0023-frozen-bindings-and-identity.md))
+    properties:
+      deny_tools:
+        type: array
+        items:
+          $ref: https://schemas.agent-platform.internal/tool/v1/tool.schema.yaml#/$defs/ToolId
+        description: >-
+          tool ที่ agent นี้ห้ามใช้ แม้เพดานจะเปิดให้
+
+          มีอยู่เพราะ **"ไม่ได้ขอ" ไม่เท่ากับ "ห้าม"** — `mcp_servers` เป็นรายการ id ของ server
+          tool ที่มาจากที่นั่น**ไม่ได้ถูกแจกแจงใน `tools`** agent จึงได้ tool ที่ไม่เคยระบุมา
+          โดยไม่มีทางปฏิเสธ · และการไม่ใส่ใน `tools` แยกไม่ออกจากการลืมใส่
+      deny_capabilities:
+        type: array
+        items:
+          $ref: https://schemas.agent-platform.internal/capability/v1/capability.schema.yaml#/$defs/CapabilityId
+        description: capability ที่ agent นี้ห้ามใช้ — ชื่อเดียวกับ `profile/v1.policy.deny_capabilities` เพื่อให้ union ตรง ๆ
+      require_human_for:
+        type: array
+        items:
+          $ref: https://schemas.agent-platform.internal/tool/v1/tool.schema.yaml#/$defs/ToolId
+        description: >-
+          tool ที่ต้องให้คนสั่งเสมอสำหรับ agent นี้ ไม่ว่า `action_risk` จะเป็นเท่าไร
+          — ชื่อเดียวกับ `profile/v1.policy.require_human_for` · **ยกระดับผู้ตัดสิน ไม่ใช่การปฏิเสธ**
+  delegation:
+    type: object
+    description: agent นี้เรียก agent อื่นได้หรือไม่
+    properties:
+      enabled: { type: boolean, default: false }
+      allowed_agents:
+        type: array
+        items:
+          $ref: https://schemas.agent-platform.internal/identity/v1/identity.schema.yaml#/$defs/AgentId
+      max_depth:
+        type: integer
+        minimum: 1
+        default: 1
+        description: กันไม่ให้ delegation วนลึกจนควบคุมต้นทุนไม่ได้
+  budget:
+    type: object
+    properties:
+      max_cost_usd_per_execution: { type: number, minimum: 0 }
+      max_cost_usd_per_day: { type: number, minimum: 0 }
+  status:
+    enum: [active, disabled]
+    default: active

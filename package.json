@@ -13,7 +13,9 @@
     "schema": "tsx scripts/emit-schema.ts",
     "cli": "tsx cli/index.ts",
     "docs:capabilities": "tsx scripts/emit-capability-matrix.ts",
-    "compat:baseline": "tsx scripts/emit-compatibility-baseline.ts"
+    "compat:baseline": "tsx scripts/emit-compatibility-baseline.ts",
+    "conformance": "tsx conformance/payload-check.ts",
+    "conformance:drift": "tsx conformance/drift-check.ts"
   },
   "dependencies": {
     "@earendil-works/pi-ai": "0.84.4",
@@ -25,6 +27,8 @@
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
+    "ajv": "^8.20.0",
+    "ajv-formats": "^3.0.1",
     "tsx": "^4.19.0",
     "typescript": "^5.7.0",
     "vitest": "^2.1.0"

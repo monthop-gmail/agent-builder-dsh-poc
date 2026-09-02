@@ -21,6 +21,10 @@
 
 ## ต่อกับ agent-platform
 
+[`../platform-contract.yaml`](../platform-contract.yaml) — consumer manifest ตาม ADR-0006
+· pin `capability/v1` `profile/v1` `execution/v1` `identity/v1` · พร้อมเหตุผลว่าทำไม
+**ไม่** pin `agent/v1` และ `tool/v1` · บังคับด้วย [`conformance/`](../conformance/)
+
 [`agent-platform-alignment.md`](agent-platform-alignment.md) — contract ของเราเทียบกับ
 `agent-platform` (L3) · ชนกันตรงไหน · ใครต้องตัดสิน · ทำไมยังไม่ใส่ `platform-contract.yaml`
 

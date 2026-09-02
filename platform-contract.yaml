@@ -1,0 +1,101 @@
+# Consumer manifest — ประกาศว่า repo นี้ยึด contract อะไรของ agent-platform
+#
+# รูปแบบตาม ADR-0006:
+#   https://github.com/monthop-gmail/agent-platform/blob/main/decisions/0006-contract-versioning.md
+#
+# repo นี้เป็น **ผู้บริโภค contract และผู้ผลิต execution record** — Builder อ่าน
+# `profile/v1` เป็นเพดาน ใช้ taxonomy ของ `capability/v1` และปล่อย record ที่มีรูปตาม
+# `execution/v1` เมื่อ runtime ย้าย provider กลางรอบ
+
+platform_contract_version: "0.1"
+
+contracts:
+  - capability/v1    # taxonomy 14 ค่า + canonical_scope ที่ tool และ manifest ใช้เรียกความสามารถ
+  - profile/v1       # เพดานที่ `--profile` รับเข้ามา แล้วรวมกับ policy ของ agent
+  - execution/v1     # `provider_switches` + `provider_id` จากการรันจริง
+  - identity/v1      # รูปของ id และ `ExecutionContext` ในทุก record ที่ปล่อย
+
+conformance:
+  status: passing
+  last_verified: 2026-09-03
+
+  # ADR-0006 บังคับ consumer 3 ข้อ
+  #   1. manifest         ไฟล์นี้
+  #   2. conformance test conformance/payload-check.ts — **ผลิต payload จากการรันจริง**
+  #                       execution record มาจากการรัน openai-compatible runtime กับ
+  #                       stub ที่ถูกบังคับให้ตอบ 503 การย้าย provider ที่ถูกบันทึก
+  #                       จึงเป็นการย้ายที่เกิดขึ้นจริง ไม่มี fixture ที่เขียนขึ้นเพื่อให้ผ่าน
+  #   3. release gate     job `conformance` ใน .github/workflows/ci.yml รันทุก PR
+  #
+  # ⚠️ ข้อ 3 จะบล็อกการ merge ได้จริงต่อเมื่อเปิด branch protection แล้วตั้ง check
+  #    เป็น required — เป็น repo setting ไม่ใช่สิ่งที่ไฟล์นี้ยืนยันได้
+
+pinned_contracts_commit: 5bb4a390887cf406f5e46aa051c31e5a7fe7c608   # conformance/pinned.yaml
+
+# ─────────────────────────────────────────────────────────────────────────────
+# สิ่งที่ **ไม่** pin และเหตุผล
+#
+# ADR-0006 บอกให้ประกาศเฉพาะที่ใช้จริง และหลักที่ทีมย้ำไว้ตั้งแต่ต้นคือ
+# **อย่าประกาศ conformance ถ้ายังไม่มี CI ที่ validate payload จริง** — ข้อนี้เป็น
+# ด้านกลับของหลักเดียวกัน: อย่าประกาศว่า conform กับ contract ที่เรายังไม่ผ่าน
+# ─────────────────────────────────────────────────────────────────────────────
+
+not_pinned:
+  agent/v1:
+    reason: >-
+      ยัง validate ไม่ผ่านเพราะ `tool/v1` `ToolId` บังคับชื่อที่มีจุด
+      (`^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$`) แต่ Tool Registry ของ repo นี้มีชื่อเปล่า
+      อยู่ด้วย (`calculator` · `current_time` · `web_search`) — เห็นได้จากผลรันของ
+      conformance/payload-check.ts ที่วัดข้อนี้ทุกรอบแม้จะไม่ pin
+    blocked_by: >-
+      การเปลี่ยนชื่อ tool เป็น breaking change ของ `agent/v1alpha2` ตาม
+      docs/contract-stability.md — manifest ที่มีอยู่จะ build ไม่ผ่าน ต้องขึ้น version
+      ใหม่พร้อม migration ไม่ใช่แก้เงียบ ๆ
+    tracked_at: docs/effective-policy.md
+  tool/v1:
+    reason: ผลพวงข้อเดียวกัน — ชื่อ tool ของเรายังไม่ใช่ `ToolId` ที่ถูกต้อง
+  model/v1:
+    reason: >-
+      ทำตาม `platform_rules` ทั้งสามข้อแล้ว (binding มาจาก capability requirement ·
+      requirement ยังเป็นแหล่งความจริง · `buildIdentity` ครอบทั้งโซ่รวมลำดับ)
+      แต่ **ไม่มี payload ของ `model/v1` ที่เราปล่อยออกมาให้ validate** — adapter คุยกับ
+      endpoint ที่เป็น OpenAI-compatible ไม่ใช่รูปของ `Request`/`Response` ในสัญญานี้
+      การ pin จึงจะเป็นการประกาศสิ่งที่ CI พิสูจน์ไม่ได้
+  policy/v1:
+    reason: >-
+      vendor schema ไว้เพราะ `profile/v1` `$ref` ไปหา `Authority` แต่ repo นี้ยังไม่ได้
+      ผลิต `Decision` record ออกมา — Builder หักสิทธิ์ที่ compile time ไม่ได้ประเมิน
+      policy ต่อ action ตอนรัน
+
+# ─────────────────────────────────────────────────────────────────────────────
+# ช่องว่างที่รู้แล้ว — วัดทุกรอบ ไม่ได้ปล่อยผ่าน
+# ─────────────────────────────────────────────────────────────────────────────
+
+known_gaps:
+  - id: bare-tool-names
+    what: >-
+      `calculator` `current_time` `web_search` ไม่ใช่ `tool/v1` `ToolId` ที่ถูกต้อง
+      ทำให้ทั้ง `agent/v1` record และ profile fixture ของเราเอง validate ไม่ผ่าน
+    measured_by: conformance/payload-check.ts
+    note: >-
+      payload-check **จะ fail ถ้าช่องว่างนี้หายไปเอง** เพื่อไม่ให้บันทึกนี้ค้างอยู่หลังจาก
+      มันถูกแก้แล้ว — เอกสารที่ไม่มีอะไรทำให้มันผิดออกมาดัง ๆ จะเก่าเสมอ
+  - id: no-tenancy-in-manifest
+    what: >-
+      `agent/v1alpha2` ไม่มี `tenant_id` / `workspace_id` เลย ทั้งที่ ADR-0007 บังคับ
+      ฝั่ง platform — conformance จึงต้องป้อนค่าจากภายนอกเวลาสร้าง record
+    note: >-
+      แผลเดียวกับที่ `devfactory-core` เจอตอนนำร่อง (RFC-0006) · ยังไม่แก้เพราะ manifest
+      freeze อยู่ และการเพิ่ม required field เป็น breaking
+
+# ─────────────────────────────────────────────────────────────────────────────
+# ที่ยังไม่มีคำตอบจาก platform
+# ─────────────────────────────────────────────────────────────────────────────
+
+open_questions:
+  - question: consumer pin ไฟล์ใน `profiles/` ได้ไหม หรือเป็นแค่ตัวอย่าง
+    asked_at: https://github.com/monthop-gmail/agent-platform/issues/47
+    status: ยังไม่มีคำตอบ
+    workaround: >-
+      `--profile` รับ path ที่ผู้เรียกส่งมา **เราไม่ได้ pin ไฟล์ profile ใด ๆ**
+      ไฟล์ใน tests/fixtures/platform/ เป็น fixture ที่ vendor มาพร้อมเลข commit

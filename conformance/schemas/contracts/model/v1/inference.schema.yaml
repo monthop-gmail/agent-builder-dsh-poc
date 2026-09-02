@@ -1,0 +1,115 @@
+$schema: https://json-schema.org/draft/2020-12/schema
+$id: https://schemas.agent-platform.internal/model/v1/inference.schema.yaml
+title: Model Inference
+description: >-
+  สัญญาการเรียก model inference — ใช้กับ model provider เท่านั้น (ADR-0004)
+  agent provider ไม่ใช้ไฟล์นี้ เพราะมันรับงานเป็น execution ไม่ใช่ message list
+
+$defs:
+  Role:
+    enum: [system, user, assistant, tool]
+
+  Message:
+    type: object
+    required: [role]
+    properties:
+      role: { $ref: '#/$defs/Role' }
+      content:
+        oneOf:
+          - type: string
+          - type: array
+            items:
+              type: object
+              required: [type]
+              properties:
+                type:
+                  enum: [text, image, audio, document]
+                text: { type: string }
+                uri: { type: string, format: uri }
+                media_type: { type: string }
+      tool_call_id: { type: string }
+
+  ToolCall:
+    type: object
+    required: [id, tool_id, arguments]
+    properties:
+      id: { type: string }
+      tool_id:
+        $ref: https://schemas.agent-platform.internal/tool/v1/tool.schema.yaml#/$defs/ToolId
+      arguments: { type: object }
+
+  Usage:
+    type: object
+    description: ใช้คิด cost attribution ต่อ tenant — ต้องมีทุกครั้งที่เรียกสำเร็จ
+    properties:
+      input_tokens: { type: integer, minimum: 0 }
+      output_tokens: { type: integer, minimum: 0 }
+      cached_input_tokens: { type: integer, minimum: 0 }
+      cost_usd: { type: number, minimum: 0 }
+
+Request:
+  type: object
+  required: [context, provider_id, model_id, messages]
+  properties:
+    context:
+      $ref: https://schemas.agent-platform.internal/identity/v1/identity.schema.yaml#/$defs/RequestContext
+    provider_id: { type: string }
+    model_id:
+      type: string
+      description: >-
+        ห้าม hard-code รายชื่อ model ไว้ใน **task schema** — การเลือก model เป็นหน้าที่ของ
+        routing ตาม capability ([ADR-0009](../../../decisions/0009-capability-model.md))
+
+        ⚠️ ข้อห้ามนี้พูดถึง **คำประกาศว่าจะให้ทำอะไร** ไม่ใช่ทุกที่ที่ชื่อ model ปรากฏได้
+        · **build artifact ที่บันทึกผลของการ resolve ไม่ใช่การ hard-code**
+        ([ADR-0023](../../../decisions/0023-frozen-bindings-and-identity.md)) — เป็น lockfile
+        ไม่ใช่คำประกาศ · การห้ามบันทึกผลการ resolve จะทำให้ build ที่ทำซ้ำได้เป็นไปไม่ได้
+        และผลักให้คน hard-code จริง ๆ แทน ซึ่งเป็นสิ่งที่ข้อห้ามนี้ตั้งใจกัน
+
+        ถ้าจำเป็นต้อง pin provider จริง ให้ใช้ `capability/v1` `constraints.pin_provider`
+    messages:
+      type: array
+      minItems: 1
+      items: { $ref: '#/$defs/Message' }
+    tools:
+      type: array
+      items:
+        $ref: https://schemas.agent-platform.internal/tool/v1/tool.schema.yaml
+    stream: { type: boolean, default: false }
+    max_output_tokens: { type: integer, minimum: 1 }
+    temperature: { type: number, minimum: 0 }
+
+Response:
+  type: object
+  required: [message, usage]
+  properties:
+    message: { $ref: '#/$defs/Message' }
+    tool_calls:
+      type: array
+      items: { $ref: '#/$defs/ToolCall' }
+    stop_reason:
+      enum: [end_turn, max_tokens, tool_use, stop_sequence, error]
+    usage: { $ref: '#/$defs/Usage' }
+    error:
+      $ref: https://schemas.agent-platform.internal/error/v1/error.schema.yaml
+
+platform_rules:
+  description: >-
+    กฎระดับ schema ที่ `agent-platform` เพิ่มเอง — ไม่ใช่ semantics ของ provider
+  rules:
+    - "binding ที่ resolve แล้วบันทึกไว้ในสิ่งที่ build แล้วได้ ถ้าครบสามข้อ (ADR-0023):
+       (1) มาจากการ resolve capability requirement ไม่ใช่คนพิมพ์ชื่อ model ลงไปเอง
+       (2) requirement ยังเป็นแหล่งความจริง — binding คือผลลัพธ์ ไม่ใช่คำประกาศ
+       ต้อง re-resolve ได้จาก requirement เดิมและอธิบายได้ว่าทำไมได้ตัวนี้
+       (3) identity ของสิ่งที่ build ต้องครอบ binding นั้น"
+    - "binding ในข้อ (3) หมายถึง **ทั้งชุดที่ถูกแช่แข็งรวมลำดับ** ไม่ใช่ตัวที่ถูกเลือกตอนรัน
+       (ADR-0025) — artifact ที่แช่แข็ง fallback chain ไว้ต้องให้ identity ครอบทั้งโซ่
+       เพราะสลับลำดับ = พฤติกรรมต่างกันภายใต้ความล้มเหลวเดียวกัน
+       ส่วนตัวที่ใช้จริงเป็น **สถานะของ execution** ไม่ใช่คุณสมบัติของสิ่งที่ build
+       — ถ้า identity ต้องครอบมัน artifact จะไม่มี identity จนกว่าจะถูกใช้"
+    - "checksum ที่คำนวณจาก manifest อย่างเดียว บอกได้แค่ว่า manifest เหมือนกัน
+       ไม่ได้บอกว่าสิ่งที่รันเหมือนกัน — catalog เปลี่ยนแล้ว checksum เท่าเดิมแต่รันคนละ model
+       ถ้า identity ไม่ครอบ binding คำว่า reproducible จะไม่มีความหมาย"
+    - "ผลการ resolve ไม่มีเจ้าของในเชิงอำนาจ เพราะไม่ใช่การตัดสิน — เป็นหลักฐานว่า
+       ณ เวลานั้น catalog ตอบว่าอะไร · ต้องแช่แข็งผลไว้ ไม่ใช่เก็บตัวชี้ เพราะสิ่งที่ชี้ไป
+       เปลี่ยนได้ (ADR-0019 เกณฑ์ สิ่งที่ชี้ไปเปลี่ยนได้ไหม)"

@@ -1,0 +1,59 @@
+$schema: https://json-schema.org/draft/2020-12/schema
+$id: https://schemas.agent-platform.internal/tool/v1/tool.schema.yaml
+title: Tool
+description: >-
+  ทุก capability ที่ agent เรียกใช้ได้ต้องเป็น tool ที่ประกาศไว้
+  agent discover tool ได้เองผ่าน registry/MCP แต่ **เรียกได้ต่อเมื่อ policy อนุญาต**
+
+$defs:
+  ToolId:
+    type: string
+    pattern: '^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$'
+    description: >-
+      namespace ด้วยจุด เช่น `github.issue.create` `odoo.sale.read` `knowledge.search`
+      ส่วนแรกคือ domain ส่วนท้ายคือ action — อ่านแล้วต้องเดาผลกระทบได้
+
+type: object
+required: [tool_id, description, input_schema, action_risk]
+properties:
+  tool_id:
+    $ref: '#/$defs/ToolId'
+  description:
+    type: string
+    description: เขียนให้ model อ่านเข้าใจว่าใช้เมื่อไหร่ ไม่ใช่แค่ว่ามันทำอะไร
+  input_schema:
+    type: object
+    description: JSON Schema ของ argument
+  output_schema:
+    type: object
+  action_risk:
+    $ref: https://schemas.agent-platform.internal/capability/v1/capability.schema.yaml#/$defs/ActionRisk
+    description: >-
+      ความเสี่ยงของ action นี้ (ADR-0010) — **ไม่ใช่** ระดับการอนุมัติ
+      การตัดสินว่าต้องอนุมัติหรือไม่เป็นหน้าที่ของ policy/v1 ซึ่งดูทั้ง tenant และ profile ประกอบ
+      ฟิลด์เดิมชื่อ `risk_level` ในเอกสารเก่า — เลิกใช้แล้ว
+  required_capabilities:
+    type: array
+    description: capability ที่ subject ต้องมีจึงจะเรียก tool นี้ได้
+    items:
+      $ref: https://schemas.agent-platform.internal/capability/v1/capability.schema.yaml#/$defs/CapabilityId
+  permission:
+    type: string
+    description: ชื่อสิทธิ์ที่ policy ใช้อ้าง เช่น `github:write`
+  timeout_seconds:
+    type: integer
+    minimum: 1
+    default: 60
+  idempotent:
+    type: boolean
+    default: false
+    description: >-
+      ถ้า false platform จะไม่ retry อัตโนมัติหลัง timeout เพราะอาจทำซ้ำของจริง
+      ดู execution/v1 เรื่อง retry semantics
+  audit:
+    type: boolean
+    default: true
+    description: ตั้งเป็น false ได้เฉพาะ tool ที่อ่านอย่างเดียวและไม่แตะข้อมูลส่วนบุคคล
+  deprecated:
+    type: boolean
+    default: false

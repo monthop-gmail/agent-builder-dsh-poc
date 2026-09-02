@@ -1,0 +1,155 @@
+$schema: https://json-schema.org/draft/2020-12/schema
+$id: https://schemas.agent-platform.internal/policy/v1/policy-decision.schema.yaml
+title: Policy Decision
+description: >-
+  ผลการประเมินของ policy engine (ADR-0010)
+  **ไม่ใช่สิ่งเดียวกับ approval** — policy บอกว่า "ต้องขออนุมัติไหม"
+  ส่วน approval คือคำตัดสินของผู้มีอำนาจ ซึ่งอยู่ใน approval/ (ยัง pending)
+
+$defs:
+  Effect:
+    enum: [allow, deny]
+
+  Authority:
+    description: >-
+      ใครต้องอนุมัติก่อนลงมือ (ADR-0010) — มีความหมายเมื่อ `effect: allow` เท่านั้น
+      consumer ที่เจอค่าที่ไม่รู้จักต้อง fallback เป็น `human_command_only`
+    enum:
+      - auto                  # ทำได้เลย
+      - notify                # ทำได้เลย แต่ต้องแจ้ง
+      - approval_required     # ต้องมีผู้มีอำนาจอนุมัติก่อน
+      - human_command_required  # AI เสนอได้อย่างเดียว คนต้องเป็นผู้สั่ง
+
+  Constraint:
+    description: เหตุผลเชิงปริมาณที่ทำให้ถูกปฏิเสธหรือถูกจำกัด
+    enum: [none, rate_limited, budget_exceeded, quota_exhausted, out_of_window]
+
+  Actor:
+    description: >-
+      **ผู้กระทำ** — *"ใครจะทำ"* ([ADR-0017](../../../decisions/0017-the-word-subject.md))
+
+      🔒 คนละอย่างกับ `subject` ในความหมายที่ contract อื่นใช้ · ดูตารางศัพท์ที่ lock ไว้
+      ใน [`decisions/README.md`](../../../decisions/README.md) — โดยเฉพาะ `consent/v1.subject_id`
+      ที่หมายถึง **เจ้าของข้อมูล** ซึ่งเป็นคนละคนกับผู้กระทำเสมอในกรณีที่น่ากังวลที่สุด
+    type: object
+    required: [principal]
+    properties:
+      principal:
+        $ref: https://schemas.agent-platform.internal/identity/v1/identity.schema.yaml#/$defs/Principal
+      agent_id:
+        $ref: https://schemas.agent-platform.internal/identity/v1/identity.schema.yaml#/$defs/AgentId
+
+  DecisionSummary:
+    description: >-
+      **ผลของ policy เท่าที่ audit ต้องใช้** — ตัดสินว่าอะไร และตัดสินจากอะไร
+      ([ADR-0018](../../../decisions/0018-policy-result-single-source.md))
+
+      มีอยู่เพราะ `event/v1.policy_result` เคยประกาศรูปนี้ซ้ำเอง ทำให้มีสองที่ที่บอกว่า
+      "ผลของ policy หน้าตาอย่างไร" และไม่มีอะไรคอยจับว่ายังตรงกัน — `consent` ที่เพิ่มเข้า
+      `Decision` ใน ADR-0016 ไม่ไหลไปที่นั่นเอง ต้องอาศัยคนจำ
+
+      🔒 **field ใหม่ใน `Decision` ไม่ไหลเข้าที่นี่เอง — ต้องเคาะทุกครั้ง**
+      ชุดย่อยนี้เป็นชุดย่อย *โดยเจตนา* ไม่ใช่เพราะหลงลืม · `reason` เป็น free text และ
+      `expires_at` ไม่มีความหมายในบันทึกที่ immutable แล้ว ทั้งคู่จึงอยู่นอกชุดนี้
+      โดยเฉพาะ `reason` ที่ถ้าไหลเข้า audit เองจะเฉียดกับ guarantee ข้อ 7 ของ `event/v1`
+      (*ห้ามเก็บ private reasoning เป็น audit record*) โดยไม่มีใครตัดสินใจ
+
+      ไม่มี `required` — ผู้ใช้แต่ละที่กำหนดเองว่าอะไรบังคับ (`Decision` บังคับ 4 ตัว
+      ส่วน `event/v1.policy_result` ไม่บังคับอะไรเลย เพราะ event บางชนิดไม่ผ่าน policy)
+    type: object
+    properties:
+      effect:
+        $ref: '#/$defs/Effect'
+      authority:
+        $ref: '#/$defs/Authority'
+      action_risk:
+        $ref: https://schemas.agent-platform.internal/capability/v1/capability.schema.yaml#/$defs/ActionRisk
+        description: >-
+          ค่าที่ใช้ประกอบการตัดสิน — บันทึกไว้ด้วยเพื่อให้ audit ย้อนหลังรู้ว่าตัดสินจากอะไร
+          ไม่ใช่แค่ผลลัพธ์ (ต่อยอดจาก backend-os §14 ที่มีแค่ `policy_result`)
+      policy_id:
+        type: string
+
+Request:
+  type: object
+  required: [context, action]
+  # ต้องมี actor หรือ subject อย่างใดอย่างหนึ่ง — ห้ามมีทั้งคู่
+  # ([ADR-0017](../../../decisions/0017-the-word-subject.md)) · payload เดิมที่ส่ง `subject`
+  # ยัง valid ทุกใบ และไม่มีใบเดิมใบไหนส่งทั้งคู่ได้เพราะ `actor` เพิ่งเกิด
+  oneOf:
+    - required: [actor]
+    - required: [subject]
+  properties:
+    context:
+      $ref: https://schemas.agent-platform.internal/identity/v1/identity.schema.yaml#/$defs/RequestContext
+    actor:
+      $ref: '#/$defs/Actor'
+    subject:
+      $ref: '#/$defs/Actor'
+      deprecated: true
+      description: >-
+        ⚠️ **เลิกใช้ — ใช้ `actor` แทน** · รูปเหมือนกันทุกอย่าง เปลี่ยนแค่ชื่อ
+
+        ชื่อนี้ผิดตามคำวินิจฉัยของ [ADR-0017](../../../decisions/0017-the-word-subject.md):
+        `subject` แปลว่า *สิ่งที่บันทึกนั้นเกี่ยวกับ* ไม่ใช่ *ผู้กระทำ* — และในไฟล์นี้มันคือผู้กระทำ
+
+        ยังอยู่เพื่อไม่ให้ consumer ที่ pin อยู่ต้องขึ้น major เพราะชื่อ · **จะถูกลบใน `policy/v2`**
+    action:
+      type: object
+      description: จะทำอะไร
+      required: [type]
+      properties:
+        type:
+          enum: [tool_call, model_call, execution_start, artifact_write, delegation]
+        tool_id:
+          $ref: https://schemas.agent-platform.internal/tool/v1/tool.schema.yaml#/$defs/ToolId
+        action_risk:
+          $ref: https://schemas.agent-platform.internal/capability/v1/capability.schema.yaml#/$defs/ActionRisk
+        resource:
+          type: string
+          description: สิ่งที่ถูกกระทำ เช่น `github:monthop-gmail/agent-platform#12`
+    consent:
+      $ref: https://schemas.agent-platform.internal/consent/v1/consent.schema.yaml#/$defs/Evaluation
+      description: >-
+        ผลการประเมินความยินยอมที่ผู้เรียก**ประเมินมาแล้ว**และส่งเข้ามาเป็น input
+        ([ADR-0016](../../../decisions/0016-recording-which-consent-allowed-access.md))
+
+        🔒 **policy ไม่ได้เป็นคนประเมิน consent** — สองด่านถูก AND กันโดยผู้เรียก
+        field นี้มีไว้ให้ policy *ใช้ประกอบ* การตัดสินได้ (เช่นกฎ "ไม่มีใบที่ยังใช้ได้ = deny")
+        ไม่ใช่ให้ policy ไปตรวจเอง · ไม่มี field นี้ = ผู้เรียกไม่ได้ส่งมา
+        **ไม่ได้แปลว่าไม่ต้องมีความยินยอม**
+
+Decision:
+  type: object
+  # `effect` `authority` `action_risk` `policy_id` มาจาก $defs/DecisionSummary
+  # ซึ่ง `event/v1.policy_result` อ้างตัวเดียวกัน — ประกาศที่เดียว ([ADR-0018](../../../decisions/0018-policy-result-single-source.md))
+  # ข้างล่างนี้คือ **ส่วนที่ Decision มีเกินจาก Summary** เท่านั้น
+  allOf:
+    - $ref: '#/$defs/DecisionSummary'
+  required: [effect, authority, policy_id, evaluated_at]
+  properties:
+    constraint:
+      $ref: '#/$defs/Constraint'
+      default: none
+    reason:
+      type: string
+    evaluated_at:
+      type: string
+      format: date-time
+    expires_at:
+      type: string
+      format: date-time
+      description: decision ที่หมดอายุแล้วต้องประเมินใหม่ ห้ามนำกลับมาใช้ซ้ำ
+    consent:
+      $ref: https://schemas.agent-platform.internal/consent/v1/consent.schema.yaml#/$defs/Evaluation
+      description: >-
+        สำเนาของ `Request.consent` ที่ได้รับมา — **มีได้ก็ต่อเมื่อผู้เรียกส่งเข้ามา**
+        เพื่อให้ decision record ตอบได้ว่าอนุญาตโดยอาศัยความยินยอมใบไหนและผลตอนนั้นเป็นอย่างไร
+        หลักเดียวกับ `action_risk` ที่บันทึกสิ่งที่ใช้ตัดสิน ไม่ใช่แค่ผลลัพธ์
+
+        🔒 **ห้ามเติมเองถ้าไม่ได้รับมา** — record ที่อ้างว่าพิจารณาสิ่งที่ไม่เคยเห็นคือ audit ที่โกหก
+
+  description: >-
+    การ mapping `action_risk × tenant/profile → authority` ต้องเป็น config
+    ห้าม hard-code ใน implementation — tenant หนึ่งอาจให้ high = approval_required
+    ขณะที่อีก tenant ให้ high = human_command_required

@@ -1,0 +1,252 @@
+$schema: https://json-schema.org/draft/2020-12/schema
+$id: https://schemas.agent-platform.internal/consent/v1/consent.schema.yaml
+title: Consent Grant
+description: >-
+  ความยินยอมให้เข้าถึงข้อมูลของบุคคล — ตอบว่า **ใครยอมให้ใครเข้าถึงข้อมูลของใคร
+  อะไรบ้าง เพื่ออะไร นานแค่ไหน**
+
+  semantics และ wire schema เป็นของ `agent-platform` ทั้งคู่ ([ADR-0012](../../../decisions/0012-consent-contract.md))
+  — ไม่มี `derived_from` เพราะไม่ derive มาจาก repo ไหน
+
+  **consent ≠ policy** — [`policy/v1`](../../policy/v1/) ตอบว่า *"identity นี้ทำ action นี้ได้ไหม"*
+  ไฟล์นี้ตอบว่า *"กับข้อมูลของคนไหน"* · การเข้าถึงต้องผ่านทั้งสองด่าน ผ่านด่านเดียวไม่พอ
+
+  ⚠️ **contract นี้บันทึกความยินยอม ไม่ได้ทำให้ความยินยอมนั้นชอบด้วยกฎหมาย**
+  ความสมบูรณ์ตาม PDPA หรือกฎหมายคุ้มครองข้อมูลอื่นเป็นเรื่องของ implementation
+  และของผู้ควบคุมข้อมูล ไม่ใช่ของ schema · **ผ่าน conformance ไม่ได้แปลว่าทำถูกกฎหมาย**
+
+$defs:
+  Scope:
+    description: >-
+      สิ่งที่ให้เข้าถึง — **แยกตามความอ่อนไหว ไม่ใช่ก้อนเดียว**
+      ค่าเป็นของโดเมน platform กำหนดแค่ว่าเป็น string ที่ตกลงกันภายใน tenant นั้น
+      (เช่น `medication.read` · `journal.read` · `document.summary`)
+    type: string
+    minLength: 1
+
+  Purpose:
+    description: >-
+      ให้เข้าถึงไปทำอะไร — ใช้ตอบ audit ว่าการเข้าถึงครั้งนั้นชอบธรรมไหม
+      **หนึ่ง grant = หนึ่งวัตถุประสงค์** ถ้ามีหลายวัตถุประสงค์ให้แยกใบ
+      เพราะ purpose ที่กว้างคือวิธีที่ consent กลายเป็นใบเบิกทางทุกอย่าง
+    type: string
+    minLength: 1
+
+  Condition:
+    description: >-
+      เงื่อนไขที่ต้อง **ยังเป็นจริงตอนเข้าถึง** ไม่ใช่แค่ตอนออกใบ
+      ([ADR-0014](../../../decisions/0014-consent-access-time-conditions.md))
+
+      ใบที่ผูกกับข้อเท็จจริงที่เปลี่ยนได้ (สังกัด · บทบาท · สถานะการจ้าง) ต้องหยุดใช้ได้
+      **ทันทีที่ข้อเท็จจริงนั้นเปลี่ยน** โดยไม่ต้องรอให้ใครมาเพิกถอน — เพราะสิ่งที่เจ้าของข้อมูล
+      ยินยอมคือ *"คนนี้ในฐานะนั้น"* ไม่ใช่ *"คนนี้ในฐานะบุคคล"*
+
+      🔒 เงื่อนไข **narrow ได้อย่างเดียว ห้ามขยายสิทธิ์** — ทั้งชุดต่อกันด้วย AND
+      เงื่อนไขที่ *ให้* สิทธิ์คือ scope ที่ปลอมตัวมา
+    type: object
+    required: [kind]
+    additionalProperties: false
+    properties:
+      kind:
+        type: string
+        pattern: '^[a-z][a-z0-9_]{2,63}$'
+        description: >-
+          ชนิดของเงื่อนไข — **ชุดเปิด · vocabulary เป็นของโดเมน platform ไม่ตีความ**
+          schema กำหนดแค่รูปของชื่อ ไม่ใช่รายการค่า (หลักเดียวกับ `event/v1` `EventTypeName`)
+
+          🔒 consumer ที่เจอ `kind` ที่ไม่รู้จักต้องถือว่า **ไม่ได้รับอนุญาต**
+          หลักเดียวกับ scope ที่ไม่รู้จัก
+      params:
+        type: object
+        description: >-
+          ค่าประกอบของเงื่อนไข — **โดเมนเป็นเจ้าของทั้งก้อน** platform ไม่ตรวจและไม่ตีความ
+          (เช่น `organization_id` ของ `org_membership`)
+
+          ที่แยกเป็นกล่องแทนที่จะวางเรียงข้าง `kind` เพราะชั้นนอกสงวนไว้ให้ platform
+          เพิ่ม field กลางทีหลังได้แบบ additive โดยไม่ชนกับคำของโดเมนที่มีคนใช้ไปแล้ว
+
+  Evaluation:
+    description: >-
+      **ผลการประเมินความยินยอม ณ วินาทีที่เข้าถึง** — ไม่ใช่ตัวชี้ไปยังใบที่จะถูกประเมินใหม่
+      ([ADR-0016](../../../decisions/0016-recording-which-consent-allowed-access.md))
+
+      มีอยู่เพราะ [ADR-0014](../../../decisions/0014-consent-access-time-conditions.md)
+      ทำให้ใบที่มี `conditions` **ตอบตัวเองไม่ได้** — การรู้แค่ `grant_id` แล้วไปประเมินใหม่
+      ทีหลังจะได้คำตอบของ *วันที่ประเมิน* ไม่ใช่ของ *วันที่เข้าถึง* · หมอที่ลาออกไปแล้ววันนี้
+      จะทำให้ replay สรุปว่าการเข้าถึงเมื่อปีที่แล้วไม่ชอบ ทั้งที่ตอนนั้นเขายังสังกัดอยู่
+
+      🔒 record นี้เป็นการ **แช่แข็งคำตอบ** ไว้ที่เวลานั้น · เขียนแล้วห้ามแก้ (เหมือน audit อื่นทั้งหมด)
+
+      ใช้ที่ `policy/v1` (`Request` เป็น input · `Decision` เป็นสำเนาของสิ่งที่ได้รับมา)
+      และที่ `event/v1` ซึ่งเป็นบ้านของ audit จริง ๆ
+    type: object
+    required: [grant_id, evaluated_at, satisfied]
+    additionalProperties: false
+    properties:
+      grant_id:
+        $ref: https://schemas.agent-platform.internal/identity/v1/identity.schema.yaml#/$defs/Id
+        description: ใบที่ใช้ — ใบเดียว ไม่ใช่รายการใบที่เข้าเกณฑ์
+      evaluated_at:
+        type: string
+        format: date-time
+        description: >-
+          เวลาที่ประเมิน — คือเวลาที่คำตอบนี้ถูกแช่แข็งไว้
+          ต่างจาก `granted_at` ของใบ และต่างจากเวลาที่บันทึกถูกเขียน
+      satisfied:
+        type: boolean
+        description: >-
+          ผลตอนนั้น — **บันทึกทั้งผ่านและไม่ผ่าน** · `false` ไม่ได้แปลว่าใบไม่มีอยู่
+          แต่แปลว่าตอนนั้นใช้ไม่ได้ (ถูกเพิกถอน · หมดอายุ · หรือเงื่อนไขไม่เป็นจริงแล้ว)
+      conditions_checked:
+        type: array
+        items:
+          type: string
+          pattern: '^[a-z][a-z0-9_]{2,63}$'
+        description: >-
+          `kind` ของเงื่อนไขที่ถูกตรวจในการประเมินครั้งนี้ — ใช้ยืนยันว่า**ไม่มีข้อไหนถูกข้าม**
+
+          ⚠️ เก็บแค่ `kind` ไม่เก็บ `params` — ใบที่มีเงื่อนไขชนิดเดียวกันสองข้อจะแยกกันไม่ออก
+          ในบันทึกนี้ · ยอมรับข้อจำกัดนี้เพราะสิ่งที่ต้องพิสูจน์คือ *ตรวจครบไหม* ไม่ใช่ *ตรวจค่าอะไร*
+          ซึ่งอ่านได้จากตัวใบเองที่เป็น immutable อยู่แล้ว
+
+type: object
+required: [grant_id, tenant_id, subject_id, grantee, scopes, purpose, granted_by, granted_at]
+
+dependentRequired:
+  # การเพิกถอนต้องบันทึกว่าใครถอนและเพราะอะไร ด้วยมาตรฐานเดียวกับ granted_by
+  # "ความยินยอมนี้ถูกถอนแล้ว" ไม่ใช่ audit record
+  # "principal นี้ถอนเมื่อเวลานี้ เพราะเหตุนี้" คือ audit record
+  revoked_at: [revoked_by, revoked_reason]
+
+properties:
+  grant_id:
+    $ref: https://schemas.agent-platform.internal/identity/v1/identity.schema.yaml#/$defs/Id
+
+  tenant_id:
+    $ref: https://schemas.agent-platform.internal/identity/v1/identity.schema.yaml#/$defs/TenantId
+    description: >-
+      🔒 **consent ข้าม tenant ไม่ได้ทุกกรณี** — grant ที่ `tenant_id` ต่างจาก
+      resource ที่จะเข้าถึงถือว่า invalid ให้ **reject ไม่ใช่ coerce** ([ADR-0007](../../../decisions/0007-multi-tenancy.md))
+      tenant isolation อยู่เหนือ consent — consent ไม่เคยเป็นเหตุผลให้ข้าม tenant
+  workspace_id:
+    $ref: https://schemas.agent-platform.internal/identity/v1/identity.schema.yaml#/$defs/WorkspaceId
+
+  subject_id:
+    $ref: https://schemas.agent-platform.internal/identity/v1/identity.schema.yaml#/$defs/Id
+    description: >-
+      **เจ้าของข้อมูล** — 🔒 ไม่ใช่ actor และไม่ใช่ resource
+
+      ⚠️ คำว่า `subject` ในไฟล์นี้คือ **data subject** ตามศัพท์กฎหมาย (PDPA/GDPR)
+      ซึ่งเป็นข้อยกเว้นที่ [ADR-0017](../../../decisions/0017-the-word-subject.md) อนุญาตไว้ · `policy/v1` ใช้ `actor` เรียกผู้กระทำ
+      **อย่าจับคู่ `consent/v1.subject_id` กับ `policy/v1.actor` ว่าเป็นคนเดียวกัน**
+      — ในเคสที่สำคัญที่สุด (หมออ่านข้อมูลผู้ป่วย) มันคนละคนเสมอ
+      ชื่อ field เป็น `subject_id` ไม่ใช่ชื่อของโดเมน (`patient_id`, `customer_id`)
+      โดยเจตนา เพราะ platform ไม่รู้จักโดเมนและไม่ควรรู้
+
+  grantee:
+    $ref: https://schemas.agent-platform.internal/identity/v1/identity.schema.yaml#/$defs/Principal
+    description: ผู้ได้รับอนุญาตให้เข้าถึง — คน agent หรือ service
+
+  scopes:
+    type: array
+    minItems: 1
+    items:
+      $ref: '#/$defs/Scope'
+    description: ว่างไม่ได้ — grant ที่ไม่ระบุ scope คือ grant ที่ไม่มีขอบเขต
+
+  purpose:
+    $ref: '#/$defs/Purpose'
+
+  granted_by:
+    $ref: https://schemas.agent-platform.internal/identity/v1/identity.schema.yaml#/$defs/Principal
+    description: >-
+      **ผู้ให้ความยินยอม** — เจ้าของข้อมูลเองหรือผู้มีอำนาจแทน
+      ต้องบันทึกเสมอว่าใคร ไม่มีกรณีที่ consent เกิดขึ้นโดยไม่มีผู้ให้
+  authority_basis:
+    type: string
+    description: >-
+      เมื่อ `granted_by` ไม่ใช่เจ้าของข้อมูลเอง — บันทึกว่าให้แทนโดยอำนาจอะไร
+      (ผู้อนุบาล · หนังสือมอบอำนาจ · ผู้ปกครองตามกฎหมาย)
+      optional เพราะ grant ที่เจ้าของให้เองไม่ต้องมี · แต่ถ้า `granted_by` ต่างจาก
+      `subject_id` แล้วไม่มีค่านี้ audit จะตอบไม่ได้ว่าทำไมคนนั้นให้แทนได้
+
+  granted_at:
+    type: string
+    format: date-time
+
+  expires_at:
+    type: [string, "null"]
+    format: date-time
+    description: >-
+      `null` = **ไม่มีวันหมดอายุ** — ไม่ใช่ "ยังไม่ได้กำหนด"
+      ความกำกวมในฟิลด์นี้อันตราย จึงไม่มีสถานะที่สาม
+      ถ้ายังไม่รู้กำหนด ให้ใส่วันที่ใกล้แล้วต่ออายุ ไม่ใช่ปล่อย `null`
+
+  conditions:
+    type: array
+    minItems: 1
+    items:
+      $ref: '#/$defs/Condition'
+    description: >-
+      เงื่อนไขที่ต้องยังเป็นจริงตอนเข้าถึง — ต่อกันด้วย **AND** ทุกข้อ
+
+      ⚠️ **ไม่มี field นี้ = ไม่มีเงื่อนไข** · `[]` ใช้ไม่ได้ (`minItems: 1`)
+      เพราะสิ่งเดียวกันต้องเขียนได้แบบเดียว — หลักเดียวกับที่ `expires_at: null`
+      แปลว่าไม่มีวันหมดอายุ ไม่ใช่ "ยังไม่ได้กำหนด"
+
+      🔒 ใบที่มี `conditions` **ตอบตัวเองไม่ได้** — ดู `platform_rules`
+
+  revoked_at:
+    type: [string, "null"]
+    format: date-time
+    description: >-
+      🔒 **การเพิกถอนมีผลทันที ไม่ใช่รอ session หมดอายุ**
+      grant ที่ถูกเพิกถอนหรือหมดอายุแล้ว **ห้ามนำกลับมาใช้ซ้ำ** ต้องสร้างใบใหม่
+  revoked_by:
+    $ref: https://schemas.agent-platform.internal/identity/v1/identity.schema.yaml#/$defs/Principal
+    description: ใครเป็นผู้เพิกถอน — required เมื่อมี `revoked_at`
+  revoked_reason:
+    type: string
+    minLength: 1
+    description: >-
+      เพราะอะไร — required เมื่อมี `revoked_at`
+      ถอนเพราะเจ้าของเปลี่ยนใจ กับถอนเพราะผู้รับละเมิดเงื่อนไข ต่างกันมากตอน audit
+
+consent_rules:
+  description: >-
+    กฎที่ทำให้ contract นี้มีค่ามากกว่าตาราง — implementation ต้องบังคับ
+    ห้ามถือว่าผ่านเพราะ schema validate ผ่าน
+  rules:
+    - "consent ข้าม tenant ไม่ได้ทุกกรณี — tenant isolation อยู่เหนือ consent"
+    - "การให้ · การใช้ · และการเพิกถอน ต้องออก audit event ทุกครั้ง (event/v1)
+       — การให้และการเพิกถอนใช้ event_type CONSENT_GRANTED / CONSENT_REVOKED
+       ส่วน **การใช้ไม่มี event type ของตัวเองโดยเจตนา** ให้แนบ field consent
+       ($defs.Evaluation) ไปกับ event ที่เกิดการเข้าถึงจริง ไม่งั้นจะมีสองบันทึก
+       ของเหตุการณ์เดียวกัน และ query ด้วย event_type จะตกหล่นการใช้ที่บันทึก
+       บน event ของโดเมน ซึ่งเป็นส่วนใหญ่ (ADR-0020)"
+    - "การเพิกถอนมีผลทันที ไม่ใช่รอ session หมดอายุ"
+    - "grant ที่หมดอายุหรือถูกเพิกถอนแล้ว ห้ามนำกลับมาใช้ซ้ำ ต้องสร้างใหม่"
+    - "ความสัมพันธ์ (ญาติ · ผู้ดูแล · ทีมเดียวกัน) ไม่ให้สิทธิ์อะไรโดยอัตโนมัติ"
+    - "การเข้าถึงต้องผ่านทั้ง policy/v1 และ consent — ผ่านด่านเดียวไม่พอ"
+    - "เงื่อนไขของ grant ต้องถูกตรวจ **ทุกครั้งที่ใช้** ไม่ใช่แค่ตอนออกใบ"
+    - "kind ของเงื่อนไขที่ไม่รู้จัก = ไม่อนุญาต — หลักเดียวกับ scope ที่ไม่รู้จัก"
+    - "ตัวตรวจเงื่อนไขที่ error = ไม่อนุญาต ไม่ใช่ปล่อยผ่าน — ระบบที่ล่มไม่ควรกลายเป็นระบบที่เปิดกว้าง"
+    - "ออกใบที่มีเงื่อนไขซึ่งระบบนั้นตรวจไม่ได้ไม่ได้ตั้งแต่แรก — ใบที่ตรวจไม่ได้จะใช้ไม่ได้
+       ตอน runtime อยู่ดี ปฏิเสธตอนออกใบดีกว่าให้เจ้าของข้อมูลเข้าใจว่าเขาให้สิทธิ์อะไรไปแล้ว"
+    - "เงื่อนไข narrow ได้อย่างเดียว ห้ามขยายสิทธิ์ — เงื่อนไขที่ให้สิทธิ์คือ scope ที่ปลอมตัวมา"
+    - "การบันทึกการใช้สิทธิ์ต้องเก็บ **ผลการประเมิน** (`$defs.Evaluation`) ไม่ใช่แค่ grant_id
+       — id ชี้ไปยังใบที่จะถูกประเมินใหม่ ซึ่งให้คำตอบของวันที่ประเมิน ไม่ใช่ของวันที่เข้าถึง"
+    - "ถ้าใบมี conditions การประเมินต้องระบุ conditions_checked ให้ครบทุกข้อ
+       — record ที่บอกว่า satisfied โดยไม่บอกว่าตรวจอะไรบ้าง พิสูจน์ไม่ได้ว่าไม่มีข้อไหนถูกข้าม"
+
+platform_rules:
+  description: กฎระดับ schema ที่ไม่ใช่ semantics
+  rules:
+    - "ไม่มี field `status` โดยเจตนา — สถานะคำนวณจาก revoked_at และ expires_at
+       ถ้ามี field เก็บสถานะซ้ำ มันจะ drift จากความจริงและไม่มีใครรู้ว่าอันไหนถูก"
+    - "grant เป็น immutable หลังสร้าง ยกเว้นการเติม revoked_at + revoked_by + revoked_reason
+       การเปลี่ยน scope, purpose หรือ conditions คือ grant ใบใหม่ ไม่ใช่การแก้ใบเดิม"
+    - "consumer ที่เจอ scope ที่ไม่รู้จักต้องถือว่า **ไม่ได้รับอนุญาต** ไม่ใช่อนุญาต"
+    - "ใบที่มี conditions **ไม่ self-contained** — อ่าน payload ใบเดียวตอบไม่ได้ว่าใช้ได้ไหม
+       เพราะความถูกต้องอยู่นอกใบแล้ว · **ห้าม cache ผล valid ตามอายุใบ**
+       ใบที่ไม่มี conditions ยังตอบตัวเองได้เหมือนเดิม"
