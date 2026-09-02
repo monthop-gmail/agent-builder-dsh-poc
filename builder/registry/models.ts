@@ -16,7 +16,7 @@ import type { ModelBinding } from "../types.js";
  *   FREE_LLM_REGISTRY_URL at the registry and it wins.
  */
 
-interface CatalogEntry {
+export interface CatalogEntry {
   /** model id to put on the wire */
   id: string;
   /** provider base URL used only when routing direct */
@@ -41,6 +41,17 @@ const SEED: Record<string, CatalogEntry> = {
     id: "glm-4.7",
     directBaseUrl: "https://api.z.ai/api/paas/v4",
     apiKeyEnv: "ZAI_API_KEY",
+  },
+  /**
+   * opencode zen — an OpenAI-compatible gateway in front of a curated model
+   * set. Its ids change as the curation changes, so there is nothing sensible
+   * to hardcode: set OPENCODE_ZEN_MODEL, or run `agent-builder models` to ask
+   * the endpoint what it serves today.
+   */
+  zen: {
+    id: process.env.OPENCODE_ZEN_MODEL ?? "",
+    directBaseUrl: "https://opencode.ai/zen/v1",
+    apiKeyEnv: "OPENCODE_ZEN_API_KEY",
   },
 };
 
@@ -85,6 +96,13 @@ export function resolveModel(preferred: string[]): ModelBinding {
     );
   }
   const entry = catalog[requested] as CatalogEntry;
+  if (!entry.id) {
+    throw new Error(
+      `model: catalog entry '${requested}' has no model id. ` +
+        `Set the matching env var (e.g. OPENCODE_ZEN_MODEL for 'zen'), ` +
+        `or run 'agent-builder models' to see what the endpoint serves.`,
+    );
+  }
 
   const gateway = process.env.LLM_GATEWAY_BASE_URL?.replace(/\/+$/, "");
   if (gateway) {
@@ -103,4 +121,29 @@ export function resolveModel(preferred: string[]): ModelBinding {
     apiKeyEnv: entry.apiKeyEnv,
     route: "direct",
   };
+}
+
+/** Raw catalog entry — used by `agent-builder models` to query a live endpoint. */
+export function catalogEntry(name: string): CatalogEntry | undefined {
+  return catalog[name];
+}
+
+export interface RemoteModel {
+  id: string;
+}
+
+/**
+ * Ask an OpenAI-compatible endpoint what it actually serves. Nothing else in
+ * the Builder guesses model ids, and neither does this: it reports what the
+ * provider says.
+ */
+export async function listRemoteModels(baseUrl: string, apiKey: string): Promise<RemoteModel[]> {
+  const res = await fetch(`${baseUrl.replace(/\/+$/, "")}/models`, {
+    headers: { authorization: `Bearer ${apiKey}` },
+    signal: AbortSignal.timeout(20_000),
+  });
+  const text = await res.text();
+  if (!res.ok) throw new Error(`HTTP ${res.status} from ${baseUrl}/models — ${text.slice(0, 300)}`);
+  const body = JSON.parse(text) as { data?: RemoteModel[]; models?: RemoteModel[] };
+  return body.data ?? body.models ?? [];
 }

@@ -5,7 +5,13 @@ import { validateManifest, type AgentManifest } from "../builder/validator.js";
 import { compileManifest, type CompileResult } from "../builder/compiler.js";
 import { packageAgent, writePackage } from "../builder/packager.js";
 import { getRuntime, listRuntimeIds } from "../builder/registry/runtimes.js";
-import { catalogOrigin, loadCatalog } from "../builder/registry/models.js";
+import {
+  catalogEntry,
+  catalogOrigin,
+  listModelNames,
+  listRemoteModels,
+  loadCatalog,
+} from "../builder/registry/models.js";
 import { AUTONOMY_LEVELS } from "../builder/registry/policy.js";
 import type { ApprovalDecision, ApprovalRequest, TraceEvent } from "../builder/types.js";
 
@@ -17,6 +23,7 @@ Usage:
   agent-builder build    <manifest> --target <id> [--out <file>]
   agent-builder run      <manifest> --target <id> [--input "..."] [--approve <mode>]
   agent-builder targets
+  agent-builder models [--provider <name>]
 
 Options:
   --target <id>     Build target. Known: ${listRuntimeIds().join(", ")}
@@ -24,6 +31,7 @@ Options:
   --out <file>      Where to write the package (build)
   --approve <mode>  auto | deny | prompt   (default: prompt on a TTY, else deny)
   --trace           Print audit trace events as they happen
+  --provider <name> Which catalog entry to query for live model ids (models)
 
 A runtime is a build target, not part of the agent: the same manifest builds
 for every target, and 'agent-builder build' proves it by emitting the same
@@ -145,6 +153,42 @@ async function main(): Promise<number> {
       out(`     ${" ".repeat(9)}effects allowed without approval: ${l.allowedEffects.join(", ") || "none"}\n`);
     }
     out(`\nModel catalog source: ${catalogOrigin()}\n\n`);
+    return 0;
+  }
+
+  if (args.command === "models") {
+    await loadCatalog().catch(() => {});
+    out(`\nCatalog (${catalogOrigin()})\n`);
+    for (const name of listModelNames()) {
+      const entry = catalogEntry(name);
+      out(`  ${name.padEnd(20)} ${entry?.id || "(no model id — set its env var)"}\n`);
+    }
+
+    // If we can reach a provider, report what it actually serves rather than
+    // guessing. The gateway wins when configured, same as at compile time.
+    const provider = flagString(args, "provider");
+    const gateway = process.env.LLM_GATEWAY_BASE_URL?.replace(/\/+$/, "");
+    const baseUrl = gateway ?? (provider ? catalogEntry(provider)?.directBaseUrl : undefined);
+    const keyEnv = gateway ? "LLM_GATEWAY_API_KEY" : provider ? catalogEntry(provider)?.apiKeyEnv : undefined;
+    const key = keyEnv ? process.env[keyEnv] : undefined;
+
+    if (!baseUrl) {
+      out(`\nTo list what an endpoint actually serves: set LLM_GATEWAY_BASE_URL, or pass --provider <name>.\n\n`);
+      return 0;
+    }
+    if (!key) {
+      out(`\n${baseUrl} — cannot query: ${keyEnv} is not set\n\n`);
+      return 0;
+    }
+    try {
+      const models = await listRemoteModels(baseUrl, key);
+      out(`\nServed by ${baseUrl}\n`);
+      for (const m of models) out(`  ${m.id}\n`);
+      out(`\n`);
+    } catch (e) {
+      err(`\ncould not query ${baseUrl}: ${(e as Error).message}\n\n`);
+      return 1;
+    }
     return 0;
   }
 

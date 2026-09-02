@@ -2,7 +2,7 @@
 
 > เขียน Agent เป็น Manifest หนึ่งไฟล์ แล้ว build ลง runtime ไหนก็ได้ — DeepSeek Harness เป็นตัวแรก
 
-**สถานะ: 🟢 PoC ใช้งานได้** — `npm test` ผ่าน 29 test, CLI รันได้จริง
+**สถานะ: 🟢 PoC ใช้งานได้** — `npm test` ผ่าน 37 test, CLI รันได้จริง
 ยังไม่ใช่ production: ไม่มี UI, ไม่มี database, sub-agent ยังไม่ทำ (P5)
 
 ```text
@@ -52,9 +52,29 @@ node dist/cli/index.js run manifests/code-reviewer.yaml --target mock --approve 
 
 # รันจริงบน DeepSeek Harness
 cp .env.example .env      # ใส่ LLM_GATEWAY_BASE_URL + LLM_GATEWAY_API_KEY
+node --env-file=.env dist/cli/index.js models          # endpoint เสิร์ฟ model อะไรบ้าง
 node --env-file=.env dist/cli/index.js run manifests/researcher.yaml \
   --target dsh --input "อธิบาย MCP protocol สั้น ๆ"
 ```
+
+### ใช้ opencode zen (หรือ OpenAI-compatible gateway ตัวอื่น)
+
+`dsh` คุยกับ OpenAI-compatible chat completions ล้วน ๆ ดังนั้น gateway ตัวไหนก็ใช้ได้ทันที
+โดยไม่ต้องแก้โค้ด — และเส้นทางนี้ก็เป็นเส้นทางที่ B1 อยากให้เดินอยู่แล้ว
+
+```bash
+LLM_GATEWAY_BASE_URL=https://opencode.ai/zen/v1
+LLM_GATEWAY_API_KEY=sk-...
+```
+
+```bash
+agent-builder models                                    # ถามว่าเสิร์ฟ model อะไร
+agent-builder run manifests/researcher.yaml --target dsh --input "..."
+```
+
+ถ้าอยากให้ manifest เรียกด้วยชื่อ `zen` ตรง ๆ (ไม่ผ่าน gateway) ตั้ง `OPENCODE_ZEN_API_KEY`
+กับ `OPENCODE_ZEN_MODEL` แล้วเขียน `model.preferred: [zen]` — catalog ไม่ hardcode model id
+ของ zen ไว้ เพราะรายการที่มันเสิร์ฟเปลี่ยนได้ ให้ถามจาก `agent-builder models` แทน
 
 | คำสั่ง | ทำอะไร |
 |---|---|
@@ -63,6 +83,7 @@ node --env-file=.env dist/cli/index.js run manifests/researcher.yaml \
 | `build <manifest> --target <id>` | ออกเป็น `.agentpkg.json` |
 | `run <manifest> --target <id>` | compile แล้วรัน |
 | `targets` | รายชื่อ target + ตาราง autonomy level |
+| `models [--provider <n>]` | catalog ในเครื่อง + ถาม endpoint จริงว่าเสิร์ฟ model อะไร |
 
 ---
 
@@ -127,7 +148,7 @@ runtimes/
   mock/adapter.ts        runtime จริงที่ไม่ต่อเน็ต ใช้ใน CI
   mcp-client.ts          MCP → ResolvedTool
 cli/index.ts             validate · inspect · build · run · targets
-tests/                   manifest · policy · portability · conformance
+tests/                   manifest · policy · portability · conformance · dsh-runtime
 ```
 
 ---
@@ -150,7 +171,7 @@ tests/                   manifest · policy · portability · conformance
 | 2 | Validation | ✅ | field แปลกปลอมและ `spec.runtime` ถูก reject |
 | 3 | Capability Registry | ✅ | 6 registry: tool · skill · mcp · model · policy · runtime |
 | 4 | Builder / Compiler | ✅ | `CompiledAgent` ไม่มี type ของ vendor |
-| 5 | DSH Runtime | ✅ | agent loop + tool calling + MCP + trace |
+| 5 | DSH Runtime | ✅ | `dsh-runtime.test.ts` — agent loop จริงยิงใส่ OpenAI-compatible server บน localhost |
 | 6 | MCP | ✅ | stdio + Streamable HTTP · `collaboration` ต่อ ai-collaboration-mcp |
 | 7 | Sub-agent | ⏳ P5 | schema รับ `spec.subagents` แล้ว ยังไม่ compile |
 | 8 | Issue → PR ⭐ | ⏳ P6 | `code-reviewer.yaml` + `github.*` tools พร้อมแล้ว |

@@ -6,13 +6,20 @@
 
 ```
 npx tsc --noEmit          exit 0
-npx vitest run            4 files · 29 passed · 5 skipped
+npx vitest run            5 files · 37 passed · 5 skipped
 
   tests/manifest.test.ts       9 passed
   tests/policy.test.ts         6 passed
   tests/portability.test.ts    5 passed
-  tests/conformance.test.ts   14 (9 passed · 5 skipped — dsh ต้องมี credential)
+  tests/dsh-runtime.test.ts    8 passed
+  tests/conformance.test.ts   14 (9 passed · 5 skipped — ต้องมี credential จริง)
 ```
+
+`dsh-runtime.test.ts` รัน `DshRuntime` ตัวจริงยิงใส่ OpenAI-compatible server จำลองบน
+127.0.0.1 ไม่มีการ mock ตัว runtime เลย — fetch เดียวกัน, parse `tool_calls` เดียวกัน,
+ต่อ message เดียวกันกับตอนคุยกับ opencode zen หรือ DeepSeek ต่างแค่ปลายทาง
+ครอบคลุม: bearer header, tool-call round trip, ชื่อ tool ที่มีจุดถูกแปลงเป็น wire name,
+policy หัก tool ไม่ให้ถูกเสนอให้ model, approval deny, tool ที่ไม่มีจริง, tool ที่ error
 
 `describe.each(listRuntimeIds())` ทำให้ conformance suite รันกับทุก runtime ที่ลงทะเบียน
 runtime ที่ต้องใช้ key ถูก skip ไม่ใช่ถูกลบ — suite ยังบันทึกไว้ว่ามันติดหนี้อะไรอยู่
@@ -64,10 +71,27 @@ $ validate bad.yaml
     Remove it and pass `--target <runtime>` instead.
 ```
 
+## opencode zen
+
+`https://opencode.ai/zen/v1` เป็น OpenAI-compatible จึงต่อได้โดยไม่ต้องแก้โค้ด
+เพิ่มเข้า catalog แล้วในชื่อ `zen` และใช้เป็น `LLM_GATEWAY_BASE_URL` ได้ตรง ๆ
+
+**ยังยิงจริงไม่ได้จาก sandbox นี้** — network egress policy บล็อก host ไว้:
+
+```
+$ agent-builder models --provider zen
+could not query https://opencode.ai/zen/v1:
+  HTTP 403 — Host not in allowlist: opencode.ai
+```
+
+ไม่ใช่ปัญหาของ token — ต้องรันจากเครื่องที่ออกเน็ตหา `opencode.ai` ได้
+catalog ไม่ hardcode model id ของ zen ไว้ (รายการที่เสิร์ฟเปลี่ยนได้)
+ใช้ `agent-builder models` ถามจาก endpoint แทน
+
 ## ยังไม่ได้ทดสอบ
 
-- **DSH runtime กับ model จริง** — ต้องมี `DEEPSEEK_API_KEY` หรือ gateway ที่เข้าถึงได้
-  โค้ด path ทั้งหมดเขียนแล้วและ typecheck ผ่าน แต่ยังไม่มีใครยิงจริง
+- **DSH กับ model จริงของผู้ให้บริการ** — loop ทดสอบครบแล้วกับ stub server
+  เหลือแค่ยืนยันว่า endpoint จริงตอบเหมือนกัน (ต้องมี key + เน็ตที่ไม่ถูกบล็อก)
 - **MCP `collaboration`** — ต้องมี `AI_COLLAB_MCP_TOKEN`
 - **MCP `filesystem`** — ต้องติดตั้ง `@modelcontextprotocol/server-filesystem` เพิ่ม
 - **`github.*` tools** — ต้องมี `GITHUB_TOKEN`
