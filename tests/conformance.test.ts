@@ -34,9 +34,18 @@ beforeAll(async () => {
   // than an endpoint. Same principle: give the adapter a local peer instead
   // of skipping it.
   acpDir = await mkdtemp(join(tmpdir(), "agent-builder-conformance-acp-"));
+  const stubAgent = resolve(import.meta.dirname, "support/acp-stub-agent.mjs");
   process.env.ACP_AGENT_COMMAND = process.execPath;
-  process.env.ACP_AGENT_ARGS = resolve(import.meta.dirname, "support/acp-stub-agent.mjs");
+  process.env.ACP_AGENT_ARGS = stubAgent;
   process.env.ACP_STUB_STATE = join(acpDir, "sessions.json");
+
+  // `dsh` gets the same stand-in. That checks the adapter's own contract —
+  // it composes a patch, launches, drives the session, cleans up — and not
+  // the harness, which is a 250 MB install CI does not carry. Whether the
+  // real binary accepts the patch is verified by hand; the command is in
+  // docs/poc-review-2026-09-02.md §14.
+  process.env.DSH_COMMAND = process.execPath;
+  process.env.DSH_ARGS = stubAgent;
 });
 
 afterAll(async () => {
@@ -46,6 +55,8 @@ afterAll(async () => {
     "ACP_AGENT_COMMAND",
     "ACP_AGENT_ARGS",
     "ACP_STUB_STATE",
+    "DSH_COMMAND",
+    "DSH_ARGS",
   ]) {
     delete process.env[key];
   }
