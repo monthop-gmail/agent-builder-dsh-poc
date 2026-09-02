@@ -2,7 +2,7 @@
 
 > เขียน Agent เป็น Manifest หนึ่งไฟล์ แล้ว build ลง runtime ไหนก็ได้
 
-**สถานะ: 🟢 PoC ใช้งานได้** — `npm test` ผ่าน 45 test, CLI รันได้จริง
+**สถานะ: 🟢 PoC ใช้งานได้** — `npm test` ผ่าน 111 test, CLI รันได้จริง
 ยังไม่ใช่ production: ไม่มี UI, ไม่มี database, sub-agent ยังไม่ทำ (P5)
 
 ```text
