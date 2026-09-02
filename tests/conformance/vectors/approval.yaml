@@ -1,0 +1,29 @@
+# humanApproval — ขออนุมัติแม้ autonomy จะอนุญาต
+#
+# แยกจาก autonomy: level 3 ทำได้ทุกอย่าง แต่ field นี้ยังบังคับให้ถาม
+apiVersion: agent/v1alpha2
+kind: Agent
+
+metadata:
+  name: vector-approval
+  version: 0.1.0
+  description: "humanApproval — ขออนุมัติแม้ autonomy จะอนุญาต"
+
+spec:
+  purpose:
+    primary: conformance_vector
+
+  model:
+    preferred: [deepseek]
+
+  autonomy:
+    level: 3
+
+  tools:
+    allowed: [github.read, github.comment]
+
+  humanApproval:
+    required: [github.comment]
+
+  audit:
+    required: true

@@ -1,0 +1,26 @@
+# MCP server ที่ต้องต่อจริง
+#
+# tool ของ MCP โผล่หลัง connect จึงต้องถูก policy กรองคนละจังหวะกับ tool ในเครื่อง
+apiVersion: agent/v1alpha2
+kind: Agent
+
+metadata:
+  name: vector-mcp
+  version: 0.1.0
+  description: "MCP server ที่ต้องต่อจริง"
+
+spec:
+  purpose:
+    primary: conformance_vector
+
+  model:
+    preferred: [deepseek]
+
+  autonomy:
+    level: 1
+
+  tools:
+    allowed: [current_time]
+
+  mcp:
+    servers: [filesystem]

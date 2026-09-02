@@ -273,10 +273,12 @@ runtimes/
   mock/adapter.ts        runtime จริงที่ไม่ต่อเน็ต ใช้ใน CI
   mcp-client.ts          MCP → ResolvedTool
 cli/index.ts             validate · inspect · build · run · targets
-tests/                   manifest · policy · portability · conformance · openai-compatible-runtime · pi-runtime · dsh-preset · acp-runtime · mcp-policy · resilience · capabilities · capability-matrix
+tests/                   manifest · policy · portability · conformance · resilience · capabilities
+                         openai-compatible-runtime · pi-runtime · acp-runtime · dsh-preset · mcp-policy
+  conformance/vectors/   ชุด vector กลาง — runtime ทุกตัวถูกทดสอบด้วยชุดเดียวกัน
   support/acp-stub-agent.mjs  ACP agent จำลอง เก็บ session ลงไฟล์เพื่อทดสอบ resume ข้าม process
   support/openai-stub.ts endpoint ปลอมบน 127.0.0.1 ให้ conformance รันได้ทุก adapter
-  fixtures/              manifest ที่มีไว้ทดสอบอย่างเดียว
+  fixtures/              fixture เฉพาะทางที่ไม่ใช่ vector กลาง
 ```
 
 ---

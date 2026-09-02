@@ -2,10 +2,8 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { loadManifest } from "../builder/loader.js";
-import { validateManifest, type AgentManifest } from "../builder/validator.js";
-import { compileManifest } from "../builder/compiler.js";
 import { getRuntime, listRuntimeIds, OFFLINE_RUNTIMES } from "../builder/registry/runtimes.js";
+import { compileVector, VECTORS } from "./conformance/vectors.js";
 import { classifyGaps } from "../builder/registry/capabilities.js";
 import { startOpenAiStub, type OpenAiStub } from "./support/openai-stub.js";
 import type { ApprovalRequest, TraceEvent } from "../builder/types.js";
@@ -20,6 +18,10 @@ import type { ApprovalRequest, TraceEvent } from "../builder/types.js";
  * it. That is what makes "needs credentials" a non-reason to skip: a runtime
  * left out of OFFLINE_RUNTIMES is a runtime this file is not actually
  * checking, and an untested adapter looks exactly like a passing one.
+ *
+ * Fixtures come from `conformance/vectors/`, not from `manifests/`. Those are
+ * examples for people to copy, and a fixture that doubles as documentation
+ * gets edited for readability — quietly changing what this file proves.
  */
 
 let stub: OpenAiStub;
@@ -69,14 +71,7 @@ afterEach(() => {
   delete process.env.ACP_STUB_TOOL;
 });
 
-const fixture = (name: string) => resolve(import.meta.dirname, "../manifests", name);
-
-async function compiled(name: string) {
-  const loaded = await loadManifest(fixture(name));
-  const result = validateManifest(loaded.value);
-  if (!result.ok) throw new Error(result.errors.join("; "));
-  return compileManifest(loaded.value as AgentManifest, loaded.checksum).agent;
-}
+const compiled = async (name: string) => (await compileVector(name)).agent;
 
 function ctx(decision: "allow" | "deny", seen: ApprovalRequest[], trace: TraceEvent[]) {
   return {
@@ -101,21 +96,23 @@ describe.each(listRuntimeIds())("Runtime conformance — %s", (id) => {
 
   it("declares what it cannot do rather than failing later", async () => {
     const runtime = await getRuntime(id);
-    expect(Array.isArray(runtime.unsupported(await compiled("coding-agent.yaml")))).toBe(true);
+    expect(Array.isArray(runtime.unsupported(await compiled("minimal")))).toBe(true);
   });
 
   it("names only gaps the registry has classified", async () => {
     // An unclassified name is refused at runtime, so a typo here would take a
     // target offline in a way that reads like a policy decision.
     const runtime = await getRuntime(id);
-    for (const fixture of ["coding-agent.yaml", "code-reviewer.yaml", "researcher.yaml"]) {
-      const report = classifyGaps(runtime.unsupported(await compiled(fixture)));
-      expect(report.unknown, `${id} on ${fixture}`).toEqual([]);
+    // Every vector, not a sample: a gap name only appears when a manifest
+    // asks for the thing it is about.
+    for (const target of VECTORS) {
+      const report = classifyGaps(runtime.unsupported(await compiled(target.name)));
+      expect(report.unknown, `${id} on vector '${target.name}'`).toEqual([]);
     }
   });
 
   maybe("never receives a tool that policy forbade", async () => {
-    const agent = await compiled("code-reviewer.yaml");
+    const agent = await compiled("forbidden");
     const runtime = await getRuntime(id);
     const handle = await runtime.createAgent(agent);
     try {
@@ -126,7 +123,7 @@ describe.each(listRuntimeIds())("Runtime conformance — %s", (id) => {
   });
 
   maybe("asks for approval before a gated tool, and honours a denial", async () => {
-    const agent = await compiled("code-reviewer.yaml");
+    const agent = await compiled("approval");
     // Every adapter only reaches the gate when its peer asks for the tool, so
     // both stand-ins are told to ask before anything is started. The ACP stub
     // reads this at spawn time, which is inside createAgent — hence before.
@@ -148,7 +145,7 @@ describe.each(listRuntimeIds())("Runtime conformance — %s", (id) => {
   });
 
   maybe("emits trace events when the manifest asks for an audit", async () => {
-    const agent = await compiled("code-reviewer.yaml");
+    const agent = await compiled("audit-on");
     expect(agent.audit).toBe(true);
     const runtime = await getRuntime(id);
     const handle = await runtime.createAgent(agent);
@@ -163,7 +160,7 @@ describe.each(listRuntimeIds())("Runtime conformance — %s", (id) => {
   });
 
   maybe("stays quiet when the manifest does not ask for an audit", async () => {
-    const agent = await compiled("researcher.yaml");
+    const agent = await compiled("audit-off");
     expect(agent.audit).toBe(false);
     const runtime = await getRuntime(id);
     const handle = await runtime.createAgent(agent);
@@ -178,7 +175,7 @@ describe.each(listRuntimeIds())("Runtime conformance — %s", (id) => {
 
   maybe("cleans up without throwing", async () => {
     const runtime = await getRuntime(id);
-    const handle = await runtime.createAgent(await compiled("researcher.yaml"));
+    const handle = await runtime.createAgent(await compiled("minimal"));
     await expect(handle.dispose()).resolves.toBeUndefined();
   });
 });
