@@ -2,7 +2,7 @@
 
 **Template:** `contract-change.yml`
 **Title:** `contract: model/v1 — binding ที่แช่แข็งไว้ ย้าย provider กลางรอบเมื่อ 429/5xx แล้ว identity ครอบอะไรกันแน่`
-**สถานะ:** 📝 ร่าง ยังไม่เปิด — `gh issue create` ถูก permission classifier บล็อก
+**สถานะ:** ✅ **เปิดแล้ว 2026-09-02** → [`agent-platform#52`](https://github.com/monthop-gmail/agent-platform/issues/52) — รอ decision
 
 ต่อจาก Follow-up ข้อ 1 ของ [Issue A](agent-platform-issue-a-capability.md) ซึ่งเป็นข้อเดียวที่ ADR-0022/0023/0024 ยังไม่แตะ
 

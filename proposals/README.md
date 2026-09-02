@@ -21,7 +21,7 @@
 |---|---|---|
 | [`agent-platform-issue-a-capability.md`](agent-platform-issue-a-capability.md) | [`agent-platform#46`](https://github.com/monthop-gmail/agent-platform/issues/46) | ✅ เปิดแล้ว · ตอบแล้ว ADR-0023 |
 | [`agent-platform-issue-b-policy-authority.md`](agent-platform-issue-b-policy-authority.md) | [`agent-platform#47`](https://github.com/monthop-gmail/agent-platform/issues/47) | ✅ เปิดแล้ว · ตอบแล้ว ADR-0022 |
-| [`agent-platform-issue-c-runtime-fallback.md`](agent-platform-issue-c-runtime-fallback.md) | `monthop-gmail/agent-platform` | 📝 ยังไม่เปิด |
+| [`agent-platform-issue-c-runtime-fallback.md`](agent-platform-issue-c-runtime-fallback.md) | [`agent-platform#52`](https://github.com/monthop-gmail/agent-platform/issues/52) | ✅ เปิดแล้ว · รอ decision |
 
 ## ตรวจกับของจริงแล้ว
 
@@ -37,8 +37,13 @@
 
 | ใบ | ปลายทาง | คำถามหลัก |
 |---|---|---|
-| A | [`agent-platform#46`](https://github.com/monthop-gmail/agent-platform/issues/46) | `model/v1` บอกว่าเลือก model ตอน runtime เท่านั้น แต่ `CompiledAgent` freeze binding ตอน build — ถูกต้องไหม และผล resolve ต้อง pin/version ไหม |
-| B | [`agent-platform#47`](https://github.com/monthop-gmail/agent-platform/issues/47) | กฎ "สามฝ่ายตกลงตรงกัน" ให้ฝ่าย agent มีแต่ `tools` (ที่แปลว่า *ขอ*) กับ `policy_profile` (แค่ชื่อ) — ขอ field ที่ตัดออกได้อย่างเดียว |
+| A | [`agent-platform#46`](https://github.com/monthop-gmail/agent-platform/issues/46) ✅ ตอบแล้ว [ADR-0023](https://github.com/monthop-gmail/agent-platform/blob/main/decisions/0023-frozen-bindings-and-identity.md) | `model/v1` บอกว่าเลือก model ตอน runtime เท่านั้น แต่ `CompiledAgent` freeze binding ตอน build — ถูกต้องไหม และผล resolve ต้อง pin/version ไหม |
+| B | [`agent-platform#47`](https://github.com/monthop-gmail/agent-platform/issues/47) ✅ ตอบแล้ว [ADR-0022](https://github.com/monthop-gmail/agent-platform/blob/main/decisions/0022-agent-may-narrow-its-own-scope.md) | กฎ "สามฝ่ายตกลงตรงกัน" ให้ฝ่าย agent มีแต่ `tools` (ที่แปลว่า *ขอ*) กับ `policy_profile` (แค่ชื่อ) — ขอ field ที่ตัดออกได้อย่างเดียว |
 
 ทั้งสองใบ comment cross-link กันไว้แล้ว เพราะเป็นคำถามเดียวกันคนละหน้า —
 **อะไรที่ freeze ตอน build ได้บ้าง**
+
+| C | [`agent-platform#52`](https://github.com/monthop-gmail/agent-platform/issues/52) 🕐 รอ decision | ย้าย provider กลางรอบเมื่อ 429/5xx แล้ว identity ครอบ *ชุดที่อนุญาต* หรือ *ตัวที่ใช้จริง* |
+
+Follow-up ของ Issue A ปิดครบแล้ว — ข้อ 1 → #52 · ข้อ 2 → [#50](https://github.com/monthop-gmail/agent-platform/issues/50) (`tool_calling` เข้า `capability/v1` v1.1.0) · ข้อ 3 → กฎการรวมใน ADR-0022
+
