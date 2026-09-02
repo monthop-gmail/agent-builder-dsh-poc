@@ -140,15 +140,19 @@ agy                                                             # โหมด T
 agy -p "prompt" --output-format stream-json                     # headless
 ```
 
-| สิ่งที่มัน mี | รายละเอียด |
+ติดตั้งแล้วรันจริงเพื่อดู flag ที่มี — **หน้า docs บอกไม่ครบ** ของจริงจาก `agy --help` (v1.1.24):
+
+| สิ่งที่มันมี | รายละเอียด |
 |---|---|
-| headless | `-p` / `--print` / `--prompt` |
+| headless | `-p` / `--print` / `--prompt` · `--print-timeout` (default 5m) |
 | output | `text` · `json` (envelope ตอนจบ) · `stream-json` = **NDJSON** events `init` `step_update` `result` |
 | input | `--input-format stream-json` — หนึ่ง JSON object ต่อบรรทัดบน stdin คุยได้หลายเทิร์นใน process เดียว |
 | resume | `--continue` / `--conversation <ID>` |
-| permission | ไม่ใช่ flag — อยู่ใน `settings.json` คีย์ `toolPermission`: `request-review` · `proceed-in-sandbox` · `always-proceed` · `strict` |
-| sandbox | `enableTerminalSandbox` · `allowNonWorkspaceAccess` |
-| MCP | ผ่าน `/mcp` ซึ่งเป็นแผง TUI |
+| model | `--model` · `--effort low\|medium\|high` |
+| permission | `--dangerously-skip-permissions` — **อนุมัติทุกอย่างหรือไม่อนุมัติเลย** ไม่มีระดับกลาง · `--mode accept-edits\|plan` |
+| sandbox | `--sandbox` |
+| MCP | **`agy mcp add/remove/list/enable/disable`** — สั่งจาก CLI ได้ ไม่ใช่แค่แผง TUI อย่างที่หน้า docs บอก |
+| อื่น ๆ | `--add-dir` · `--json-schema` (บังคับ structured output) · `--agent` · `--project` |
 
 ### ถ้าจะทำ adapter จะได้หน้าตาแบบนี้
 
@@ -166,23 +170,40 @@ CompiledAgent
 | gap | ระดับ | เพราะ |
 |---|---|---|
 | `tools.local` | ⚠ degrades | tool ของเราเป็น TypeScript ในรีโปนี้ ส่งข้าม process ไม่ได้ |
-| `policy.forbidden` | ⛔ **blocks** | ไม่มี flag หรือคีย์ไหนหัก tool รายตัวได้ — `/permissions` เป็นแผง TUI |
-| `policy.humanApproval` | ⛔ **blocks** | `request-review` ถามผ่าน TUI ไม่มีทางส่งคำถามออกมาที่ `ctx.requestApproval` ของเรา |
+| `policy.forbidden` | ⛔ **blocks** | ไม่มี flag ไหนหัก tool รายตัวได้ — `--dangerously-skip-permissions` เป็นแบบเปิดหมดหรือปิดหมด |
+| `policy.humanApproval` | ⛔ **blocks** | ไม่มีทางส่งคำขออนุมัติออกมาที่ `ctx.requestApproval` ของเรา มีแต่ข้ามทั้งหมดหรือถามในเทอร์มินัล |
 
 ตามกติกาข้อ 13 → **manifest ที่มี `policy.forbidden` หรือ `humanApproval` จะถูกปฏิเสธ**
 เหลือใช้ได้เฉพาะ manifest ทรงเดียวกับ vector `minimal`
 
-### ยังไม่ได้ทำ และเหตุผล
+### ติดตั้งแล้ว แต่รันไม่ได้ — และเหตุผลชัดเจน
 
-**ยังไม่ได้รัน** — ติดตั้งเป็น `curl | bash` จาก vendor และต้องมี credential ของ Google
-ซึ่งเครื่องนี้ไม่มี ตามวิธีทำงานของรีโปนี้ adapter ที่ยืนยันด้วยการรันไม่ได้ ก็ไม่ควรมี
-(นี่คือบทเรียนเดียวกับที่ทำให้ target ชื่อ `dsh` เดิมต้องเปลี่ยนชื่อ — ดู §4.1 ของ
-[`poc-review-2026-09-02.md`](poc-review-2026-09-02.md))
+ติดตั้งสำเร็จ (`agy 1.1.24`) แต่ **auth ด้วย API key ไม่ได้** — ยืนยันด้วยการรัน ไม่ใช่การเดา:
+
+```
+$ GEMINI_API_KEY=... GOOGLE_API_KEY=... agy -p "say KEY-OK" --output-format json
+Authentication required. Please visit the URL to log in:
+  https://accounts.google.com/o/oauth2/auth?...&scope=cloud-platform+userinfo.email+aicode+openid
+Waiting for authentication (timeout 60s)...
+Error: authentication timed out.
+```
+
+มันบังคับ **Google OAuth แบบ interactive** (scope: `cloud-platform` · `aicode` · `openid` ฯลฯ)
+ไม่สนใจ `GEMINI_API_KEY` หรือ `GOOGLE_API_KEY` เลย — คนละระบบกับ Gemini API
+`agy models` ก็ตอบว่า *"Please sign in to view available models"*
+
+**ผลคือ target นี้จะรันอัตโนมัติไม่ได้จนกว่าจะมีคน login ด้วยบัญชี Google หนึ่งครั้ง**
+ซึ่งเป็นข้อจำกัดที่ต้องรู้ก่อนตัดสินใจ ไม่ใช่หลังเขียน adapter เสร็จ
 
 ตัดสินใจได้สองทาง:
 
-1. **ทำ** — ถ้ามี credential แล้วยอมรับว่าจะรองรับได้แค่ manifest ที่ไม่มี policy
+1. **ทำ** — ต้อง login ก่อน แล้วยอมรับว่ารองรับได้แค่ manifest ที่ไม่มี policy
 2. **ไม่ทำ** — รอดูว่าเขาจะเพิ่ม ACP ไหม เหมือนที่ Gemini CLI, Kimi, opencode ทำไปแล้ว
+
+### ข้อควรระวังตอนติดตั้ง
+
+installer เขียน `export PATH=...` ต่อท้าย **`~/.bashrc` และ `~/.profile`** โดยไม่ถาม
+แม้จะสั่ง `--dir` ให้ลงที่อื่นก็ตาม ถ้าลงในไดเรกทอรีชั่วคราว บรรทัดพวกนั้นจะชี้ไปที่ที่ไม่มีอยู่จริง
 
 ## ผล interop จริง 4 เจ้า
 
