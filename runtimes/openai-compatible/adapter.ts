@@ -4,7 +4,9 @@ import type {
   AgentRuntime,
   CompiledAgent,
   ModelBinding,
+  ProviderSwitch,
   ResolvedTool,
+  SwitchReason,
   RunContext,
   TraceEvent,
 } from "../../builder/types.js";
@@ -102,12 +104,29 @@ export class OpenAiCompatibleRuntime implements AgentRuntime {
     const { compiled } = handle;
 
     const trace: TraceEvent[] = [];
+    const switches: ProviderSwitch[] = [];
     let toolCalls = 0;
     const record = (kind: TraceEvent["kind"], detail: Record<string, unknown>) => {
       const event: TraceEvent = { at: new Date().toISOString(), kind, detail };
       trace.push(event);
       if (compiled.audit) ctx.onTrace(event);
     };
+
+    // Which endpoint answered last. Once the primary is refusing, starting
+    // from the one that worked stops every later step paying its retries.
+    // Declared up here because `abort` below reads it, and the first abort can
+    // fire before the model loop is ever entered.
+    let preferred = 0;
+
+    /**
+     * `providerId` is whichever endpoint is in effect NOW, and the switches
+     * are omitted entirely when there were none — `execution/v1` forbids `[]`
+     * so that "never switched" cannot be confused with "not recorded".
+     */
+    const reportedProviders = () => ({
+      providerId: endpoints[preferred]?.binding.requested,
+      ...(switches.length ? { providerSwitches: switches } : {}),
+    });
 
     /**
      * Fail with what already happened attached. A tool that ran before the
@@ -120,6 +139,7 @@ export class OpenAiCompatibleRuntime implements AgentRuntime {
         sessionId: handle.sessionId,
         trace,
         toolCalls,
+        ...reportedProviders(),
       });
     };
 
@@ -142,9 +162,6 @@ export class OpenAiCompatibleRuntime implements AgentRuntime {
       { role: "user", content: input },
     ];
 
-    // Which endpoint answered last. Once the primary is refusing, starting
-    // from the one that worked stops every later step paying its retries.
-    let preferred = 0;
 
     for (let step = 0; step < MAX_STEPS; step += 1) {
       const attempt = await callWithFallback(
@@ -158,6 +175,7 @@ export class OpenAiCompatibleRuntime implements AgentRuntime {
         this.retry,
         record,
         step,
+        switches,
       );
       if (!attempt.body) {
         record("error", { step, message: attempt.lastError });
@@ -180,6 +198,7 @@ export class OpenAiCompatibleRuntime implements AgentRuntime {
           sessionId: handle.sessionId,
           trace,
           toolCalls,
+          ...reportedProviders(),
         };
       }
 
@@ -287,6 +306,20 @@ interface CallOutcome {
 }
 
 /**
+ * Why we left an endpoint, in `error/v1` `Category` terms.
+ *
+ * ADR-0025 reuses that enum for `provider_switches.reason` instead of minting
+ * a new one, so the mapping happens once, here, rather than as a string in
+ * whatever the trace happened to say.
+ */
+function switchReason(status: number): SwitchReason {
+  if (status === 429) return "rate_limited";
+  // 408, and the 0 we use for a thrown fetch — both mean no answer came back.
+  if (status === 408 || status === 0) return "timeout";
+  return "provider_error";
+}
+
+/**
  * One model turn: retry the preferred endpoint with backoff, then fall
  * through the rest of the chain.
  *
@@ -301,6 +334,7 @@ async function callWithFallback(
   policy: RetryPolicy,
   record: (kind: TraceEvent["kind"], detail: Record<string, unknown>) => void,
   step: number,
+  switches: ProviderSwitch[],
 ): Promise<CallOutcome> {
   const order = [
     ...endpoints.slice(preferred),
@@ -311,6 +345,7 @@ async function callWithFallback(
   for (const endpoint of order) {
     const index = endpoints.indexOf(endpoint);
     record("model_call", { step, model: endpoint.binding.id });
+    let lastStatus = 0;
 
     for (let attempt = 1; attempt <= policy.attempts; attempt += 1) {
       let status = 0;
@@ -325,6 +360,7 @@ async function callWithFallback(
           signal: AbortSignal.timeout(120_000),
         });
         status = res.status;
+        lastStatus = status;
         const text = await res.text();
         if (res.ok) return { body: JSON.parse(text) as ChatResponse, index, lastError };
         lastError = `HTTP ${status} from ${endpoint.binding.baseUrl} — ${text.slice(0, 400)}`;
@@ -339,7 +375,18 @@ async function callWithFallback(
     }
 
     const next = order[order.indexOf(endpoint) + 1];
-    if (next) record("retry", { from: endpoint.binding.requested, to: next.binding.requested, reason: lastError });
+    if (next) {
+      record("retry", { from: endpoint.binding.requested, to: next.binding.requested, reason: lastError });
+      // The trace already said this in prose. `providerSwitches` says it in
+      // the shape `execution/v1` accepts, because a record that only a human
+      // can read is not an audit trail anyone can check.
+      switches.push({
+        from: endpoint.binding.requested,
+        to: next.binding.requested,
+        at: new Date().toISOString(),
+        reason: switchReason(lastStatus),
+      });
+    }
   }
 
   return { index: preferred, lastError };

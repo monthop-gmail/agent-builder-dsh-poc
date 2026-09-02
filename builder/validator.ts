@@ -55,6 +55,24 @@ const manifestSchema = z.strictObject({
       })
       .optional(),
     skills: z.array(z.string().min(1)).optional(),
+    /**
+     * `capability/v1` `requirement` — what this agent NEEDS, in the platform's
+     * taxonomy (ADR-0009: declare the need, not the provider).
+     *
+     * `required` is a hard requirement: ADR-0022 makes a binding INVALID when
+     * anything here is denied by the agent's own policy or by the profile it
+     * is bound to. `preferred` is soft and does not participate in that rule.
+     *
+     * ⚠️ This does NOT yet drive model selection — `spec.model.preferred`
+     * still does. Declaring the requirement and resolving from it are two
+     * separate pieces of work, and the second one has not been done.
+     */
+    capabilities: z
+      .strictObject({
+        required: z.array(z.string().min(1)).optional(),
+        preferred: z.array(z.string().min(1)).optional(),
+      })
+      .optional(),
     mcp: z
       .strictObject({
         servers: z.array(z.string().min(1)),
@@ -178,6 +196,39 @@ export function validateManifest(candidate: unknown): ValidationResult {
   // ADR-0009 says a consumer that meets an unknown capability must treat it as
   // absent. Denying something the taxonomy has never heard of therefore
   // withholds nothing — the same shape of mistake as a typo'd forbidden tool.
+  // A required capability outside the taxonomy is worse than a denied one:
+  // ADR-0009 says a consumer meeting an unknown capability must treat it as
+  // ABSENT, so a requirement nothing can ever satisfy would silently never be
+  // met. That is an error, not a warning.
+  for (const name of m.spec.capabilities?.required ?? []) {
+    if (!isKnownCapability(name)) {
+      errors.push(
+        `capabilities.required: '${name}' is not in capability/v1 (known: ${CAPABILITY_IDS.join(", ")}) — ` +
+          `an unknown capability counts as absent, so nothing could ever satisfy this`,
+      );
+    }
+  }
+  for (const name of m.spec.capabilities?.preferred ?? []) {
+    if (!isKnownCapability(name)) {
+      warnings.push(
+        `capabilities.preferred: '${name}' is not in capability/v1 — it will never rank anything`,
+      );
+    }
+  }
+
+  // The agent contradicting itself, with no profile involved. Caught here so
+  // the message names the manifest rather than blaming whatever profile the
+  // build happens to be bound to later.
+  const selfDenied = (m.spec.capabilities?.required ?? []).filter((c) =>
+    (m.spec.policy?.deniedCapabilities ?? []).includes(c),
+  );
+  for (const name of selfDenied) {
+    errors.push(
+      `capabilities.required: '${name}' is also in policy.deniedCapabilities — ` +
+        `an agent cannot require what it forbids itself`,
+    );
+  }
+
   for (const name of m.spec.policy?.deniedCapabilities ?? []) {
     if (!isKnownCapability(name)) {
       warnings.push(

@@ -57,6 +57,25 @@ adapter คืน **ชื่อเปล่า ๆ** เท่านั้น �
    ถ้าได้ `deny` ให้บอก model ว่าถูกปฏิเสธ อย่าเงียบ อย่า retry
 3. **ส่ง `ctx.onTrace` ทุก event เมื่อ `compiled.audit === true`** และไม่ส่งเลยเมื่อเป็น `false`
 4. **`dispose()` ต้องปิด MCP connection ทุกตัว** และไม่ throw
+5. **ถ้าย้าย provider กลางรอบ ต้องบันทึกใน `result.providerSwitches`**
+   — `agent-platform` ADR-0025 ไม่ได้ตัดสินว่าใครเป็นคนย้าย (router หรือ adapter ก็ได้)
+   สิ่งที่บังคับคือ **ถ้าย้ายแล้วต้องบันทึก**
+
+### เรื่องการย้าย provider
+
+`result.providerId` = **ตัวที่มีผลล่าสุด** ไม่ใช่ตัวเดียวที่เคยใช้ — อ่านมันอย่างเดียว
+หลังจากมีการย้ายจะได้ความจริงไม่ครบ
+
+`result.providerSwitches` เป็น `{from?, to, at, reason}` เรียงตามเวลา ตามรูปของ
+`execution/v1.provider_switches` โดย `reason` ใช้ `error/v1` `Category` ที่มีอยู่แล้ว
+(`rate_limited` · `timeout` · `provider_error`) ไม่ตั้งคำใหม่
+
+**ไม่มี field = ไม่เคยย้าย** · `[]` ใช้ไม่ได้ (`minItems: 1` ฝั่งเขา) —
+เพื่อไม่ให้ *"ไม่ได้เกิด"* กับ *"ไม่ได้บันทึก"* เขียนออกมาเหมือนกัน
+
+⚠️ run ที่มีการย้าย **คิด cost จากผลรวม token ตรง ๆ ไม่ได้** เพราะรวมของหลาย provider
+ที่ราคาต่อ token คนละอัตรา · ADR-0025 เลือกเขียนเป็นกฎไว้ก่อน แทนที่จะเดารูป
+per-provider usage ให้กับงานที่ยังไม่มีใครทำ
 
 ## ขั้นตอน
 
