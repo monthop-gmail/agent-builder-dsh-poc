@@ -39,6 +39,14 @@ export interface OpenAiStub {
    * reaches the tool when they do not match.
    */
   callQueue: StubCall[];
+  /**
+   * Status to return instead of a reply, one entry per request, then normal
+   * service. `null` serves that request normally — useful when the failure
+   * has to land on the second model turn rather than the first.
+   */
+  failQueue: (number | null)[];
+  /** Model ids that always fail, mapped to the status they fail with. */
+  failModels: Record<string, number>;
   text: string;
   reset(): void;
   close(): Promise<void>;
@@ -52,7 +60,13 @@ interface WireBody {
 }
 
 export async function startOpenAiStub(): Promise<OpenAiStub> {
-  const state = { callQueue: [] as StubCall[], text: "stub reply", requests: [] as StubRequest[] };
+  const state = {
+    callQueue: [] as StubCall[],
+    failQueue: [] as (number | null)[],
+    failModels: {} as Record<string, number>,
+    text: "stub reply",
+    requests: [] as StubRequest[],
+  };
 
   const server: Server = createServer((req, res) => {
     let raw = "";
@@ -66,6 +80,13 @@ export async function startOpenAiStub(): Promise<OpenAiStub> {
         toolNames: offered,
         messageCount: Array.isArray(body.messages) ? body.messages.length : 0,
       });
+
+      const forced = state.failQueue.shift() ?? state.failModels[body.model ?? ""] ?? undefined;
+      if (forced !== undefined) {
+        res.writeHead(forced, { "content-type": "application/json" });
+        res.end(JSON.stringify({ error: { message: `stub refused with ${forced}` } }));
+        return;
+      }
 
       // Take the next queued call the caller can actually make.
       let call: StubCall | undefined;
@@ -93,6 +114,18 @@ export async function startOpenAiStub(): Promise<OpenAiStub> {
     set callQueue(next: StubCall[]) {
       state.callQueue = next;
     },
+    get failQueue() {
+      return state.failQueue;
+    },
+    set failQueue(next: (number | null)[]) {
+      state.failQueue = next;
+    },
+    get failModels() {
+      return state.failModels;
+    },
+    set failModels(next: Record<string, number>) {
+      state.failModels = next;
+    },
     get text() {
       return state.text;
     },
@@ -102,6 +135,8 @@ export async function startOpenAiStub(): Promise<OpenAiStub> {
     reset() {
       state.requests.length = 0;
       state.callQueue = [];
+      state.failQueue = [];
+      state.failModels = {};
       state.text = "stub reply";
     },
     close: () => new Promise<void>((resolve) => server.close(() => resolve())),

@@ -3,10 +3,19 @@ import type {
   AgentResult,
   AgentRuntime,
   CompiledAgent,
+  ModelBinding,
   ResolvedTool,
   RunContext,
   TraceEvent,
 } from "../../builder/types.js";
+import { RunAborted } from "../../builder/errors.js";
+import {
+  DEFAULT_RETRY,
+  isRetryableStatus,
+  retryDelayMs,
+  sleep,
+  type RetryPolicy,
+} from "../../builder/retry.js";
 import { attachMcpServers, type McpConnection } from "../mcp-client.js";
 import { indexByWireName } from "../../builder/tool-names.js";
 
@@ -58,6 +67,9 @@ interface DshHandle extends AgentHandle {
 export class DshRuntime implements AgentRuntime {
   readonly id = "dsh";
 
+  /** Injectable so tests can drop the backoff instead of waiting it out. */
+  constructor(private readonly retry: RetryPolicy = DEFAULT_RETRY) {}
+
   unsupported(_compiled: CompiledAgent): string[] {
     return [];
   }
@@ -87,19 +99,36 @@ export class DshRuntime implements AgentRuntime {
     const handle = agent as DshHandle;
     const { compiled } = handle;
 
-    const apiKey = process.env[compiled.model.apiKeyEnv];
-    if (!apiKey) {
-      throw new Error(
-        `dsh: ${compiled.model.apiKeyEnv} is not set — needed to reach ${compiled.model.baseUrl}`,
-      );
-    }
-
     const trace: TraceEvent[] = [];
+    let toolCalls = 0;
     const record = (kind: TraceEvent["kind"], detail: Record<string, unknown>) => {
       const event: TraceEvent = { at: new Date().toISOString(), kind, detail };
       trace.push(event);
       if (compiled.audit) ctx.onTrace(event);
     };
+
+    /**
+     * Fail with what already happened attached. A tool that ran before the
+     * model died has left its side effect behind; reporting a bare error
+     * would tell the caller nothing happened.
+     */
+    const abort = (message: string): never => {
+      throw new RunAborted(`dsh: ${message}`, {
+        output: "",
+        sessionId: handle.sessionId,
+        trace,
+        toolCalls,
+      });
+    };
+
+    const endpoints = usableEndpoints(compiled, record);
+    if (!endpoints.length) {
+      abort(
+        `no usable model: ${[compiled.model, ...compiled.modelFallbacks]
+          .map((m) => `${m.requested} needs ${m.apiKeyEnv}`)
+          .join("; ")}`,
+      );
+    }
 
     const wireTools = [...handle.tools.entries()].map(([name, tool]) => ({
       type: "function" as const,
@@ -111,43 +140,41 @@ export class DshRuntime implements AgentRuntime {
       { role: "user", content: input },
     ];
 
-    let toolCalls = 0;
+    // Which endpoint answered last. Once the primary is refusing, starting
+    // from the one that worked stops every later step paying its retries.
+    let preferred = 0;
 
     for (let step = 0; step < MAX_STEPS; step += 1) {
-      record("model_call", { step, model: compiled.model.id, messages: messages.length });
-
-      const res = await fetch(`${compiled.model.baseUrl}/chat/completions`, {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          authorization: `Bearer ${apiKey}`,
-        },
-        body: JSON.stringify({
-          model: compiled.model.id,
+      const attempt = await callWithFallback(
+        endpoints,
+        preferred,
+        (binding) => ({
+          model: binding.id,
           messages,
           ...(wireTools.length ? { tools: wireTools, tool_choice: "auto" } : {}),
         }),
-        signal: AbortSignal.timeout(120_000),
-      });
-
-      const text = await res.text();
-      if (!res.ok) {
-        record("error", { status: res.status, body: text.slice(0, 400) });
-        throw new Error(`dsh: HTTP ${res.status} from ${compiled.model.baseUrl} — ${text.slice(0, 400)}`);
+        this.retry,
+        record,
+        step,
+      );
+      if (!attempt.body) {
+        record("error", { step, message: attempt.lastError });
+        abort(attempt.lastError);
       }
+      preferred = attempt.index;
 
-      const body = JSON.parse(text) as ChatResponse;
-      if (body.error) throw new Error(`dsh: ${body.error.message ?? "unknown model error"}`);
+      const body = attempt.body as ChatResponse;
+      if (body.error) abort(body.error.message ?? "unknown model error");
 
       const message = body.choices?.[0]?.message;
-      if (!message) throw new Error("dsh: model returned no choices");
-      messages.push(message);
+      if (!message) abort("model returned no choices");
+      messages.push(message as ChatMessage);
 
-      const calls = message.tool_calls ?? [];
+      const calls = (message as ChatMessage).tool_calls ?? [];
       if (!calls.length) {
         record("finish", { step, toolCalls });
         return {
-          output: (message.content ?? "").trim(),
+          output: ((message as ChatMessage).content ?? "").trim(),
           sessionId: handle.sessionId,
           trace,
           toolCalls,
@@ -214,10 +241,101 @@ export class DshRuntime implements AgentRuntime {
     }
 
     record("error", { message: `stopped after ${MAX_STEPS} steps` });
-    throw new Error(`dsh: agent did not finish within ${MAX_STEPS} steps`);
+    return abort(`agent did not finish within ${MAX_STEPS} steps`);
   }
 
   async resume(sessionId: string): Promise<AgentHandle> {
     throw new Error(`DshRuntime.resume('${sessionId}') is not implemented (planned P5)`);
   }
+}
+
+interface Endpoint {
+  binding: ModelBinding;
+  apiKey: string;
+}
+
+/**
+ * The models this process can actually reach, in manifest order.
+ *
+ * A fallback whose key is absent is dropped here rather than at the moment it
+ * is needed, and the drop is traced: silently having no fallback left is how
+ * a run appears to have had no alternative.
+ */
+function usableEndpoints(
+  compiled: CompiledAgent,
+  record: (kind: TraceEvent["kind"], detail: Record<string, unknown>) => void,
+): Endpoint[] {
+  const endpoints: Endpoint[] = [];
+  for (const binding of [compiled.model, ...compiled.modelFallbacks]) {
+    const apiKey = process.env[binding.apiKeyEnv];
+    if (apiKey) endpoints.push({ binding, apiKey });
+    else record("retry", { skipped: binding.requested, reason: `${binding.apiKeyEnv} is not set` });
+  }
+  return endpoints;
+}
+
+interface CallOutcome {
+  body?: ChatResponse;
+  /** Endpoint that answered, so the next step can start there. */
+  index: number;
+  lastError: string;
+}
+
+/**
+ * One model turn: retry the preferred endpoint with backoff, then fall
+ * through the rest of the chain.
+ *
+ * 429 and 5xx mean "not now" and are worth waiting on; anything else means
+ * this endpoint will keep saying no, so the chain moves on rather than
+ * burning the remaining attempts.
+ */
+async function callWithFallback(
+  endpoints: Endpoint[],
+  preferred: number,
+  payload: (binding: ModelBinding) => Record<string, unknown>,
+  policy: RetryPolicy,
+  record: (kind: TraceEvent["kind"], detail: Record<string, unknown>) => void,
+  step: number,
+): Promise<CallOutcome> {
+  const order = [
+    ...endpoints.slice(preferred),
+    ...endpoints.slice(0, preferred),
+  ];
+  let lastError = "no endpoint was tried";
+
+  for (const endpoint of order) {
+    const index = endpoints.indexOf(endpoint);
+    record("model_call", { step, model: endpoint.binding.id });
+
+    for (let attempt = 1; attempt <= policy.attempts; attempt += 1) {
+      let status = 0;
+      try {
+        const res = await fetch(`${endpoint.binding.baseUrl}/chat/completions`, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            authorization: `Bearer ${endpoint.apiKey}`,
+          },
+          body: JSON.stringify(payload(endpoint.binding)),
+          signal: AbortSignal.timeout(120_000),
+        });
+        status = res.status;
+        const text = await res.text();
+        if (res.ok) return { body: JSON.parse(text) as ChatResponse, index, lastError };
+        lastError = `HTTP ${status} from ${endpoint.binding.baseUrl} — ${text.slice(0, 400)}`;
+      } catch (error) {
+        lastError = `${endpoint.binding.baseUrl}: ${(error as Error).message}`;
+      }
+
+      const worthWaiting = status === 0 || isRetryableStatus(status);
+      if (!worthWaiting || attempt === policy.attempts) break;
+      record("retry", { model: endpoint.binding.id, attempt, status, reason: lastError });
+      await sleep(retryDelayMs(policy, attempt));
+    }
+
+    const next = order[order.indexOf(endpoint) + 1];
+    if (next) record("retry", { from: endpoint.binding.requested, to: next.binding.requested, reason: lastError });
+  }
+
+  return { index: preferred, lastError };
 }

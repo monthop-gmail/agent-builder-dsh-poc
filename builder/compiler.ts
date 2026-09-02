@@ -1,7 +1,7 @@
 import type { AgentManifest } from "./validator.js";
-import type { CompiledAgent } from "./types.js";
+import type { CompiledAgent, ModelBinding } from "./types.js";
 import { resolveCapabilities } from "./resolver.js";
-import { resolveModel } from "./registry/models.js";
+import { resolveModelChain } from "./registry/models.js";
 import { autonomyFor, decideCapabilities } from "./registry/policy.js";
 
 /**
@@ -35,7 +35,10 @@ export function compileManifest(manifest: AgentManifest, manifestChecksum: strin
     humanApproval: manifest.spec.humanApproval?.required ?? [],
   });
 
-  const model = resolveModel(manifest.spec.model.preferred);
+  const [model, ...modelFallbacks] = resolveModelChain(manifest.spec.model.preferred) as [
+    ModelBinding,
+    ...ModelBinding[],
+  ];
 
   return {
     agent: {
@@ -44,6 +47,7 @@ export function compileManifest(manifest: AgentManifest, manifestChecksum: strin
       description: manifest.metadata.description ?? "",
       purpose: manifest.spec.purpose.primary,
       model,
+      modelFallbacks,
       systemPrompt: composeSystemPrompt(manifest, skills, decision.approvalRequired),
       tools: decision.granted,
       skills,

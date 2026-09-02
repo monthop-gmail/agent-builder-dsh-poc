@@ -77,6 +77,13 @@ export interface CompiledAgent {
   description: string;
   purpose: string;
   model: ModelBinding;
+  /**
+   * The rest of `spec.model.preferred`, in order, for a runtime that can move
+   * on when the first endpoint keeps refusing. Empty when the manifest named
+   * one model. An adapter that cannot use these says so via `unsupported()`
+   * rather than pretending the manifest got what it asked for.
+   */
+  modelFallbacks: ModelBinding[];
   systemPrompt: string;
   /** Already filtered: forbidden removed, autonomy applied. */
   tools: ResolvedTool[];
@@ -109,7 +116,7 @@ export type ApprovalDecision = "allow" | "deny";
 
 export interface TraceEvent {
   at: string;
-  kind: "model_call" | "tool_call" | "tool_result" | "approval" | "error" | "finish";
+  kind: "model_call" | "tool_call" | "tool_result" | "approval" | "retry" | "error" | "finish";
   detail: Record<string, unknown>;
 }
 

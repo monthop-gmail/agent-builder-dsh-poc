@@ -144,9 +144,18 @@ describe("PiRuntime against a stub endpoint", () => {
     }
   });
 
-  it("declares the audit fidelity it cannot provide", async () => {
+  it("declares what it cannot honour instead of pretending", async () => {
     const runtime = new PiRuntime();
-    expect(runtime.unsupported(await compiled("code-reviewer.yaml"))).toContain("trace.model_step");
-    expect(runtime.unsupported(await compiled("researcher.yaml"))).toEqual([]);
+
+    // audit on, one model named: only the trace-fidelity gap applies.
+    const reviewer = await compiled("code-reviewer.yaml");
+    expect(reviewer.modelFallbacks).toEqual([]);
+    expect(runtime.unsupported(reviewer)).toEqual(["trace.model_step"]);
+
+    // audit off, two models named: a Pi session is bound to one provider, so
+    // the manifest's fallback is not reachable and the adapter says so.
+    const researcher = await compiled("researcher.yaml");
+    expect(researcher.modelFallbacks.length).toBeGreaterThan(0);
+    expect(runtime.unsupported(researcher)).toEqual(["model.fallback"]);
   });
 });

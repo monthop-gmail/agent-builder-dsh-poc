@@ -49,7 +49,7 @@ manifest ที่เพิ่มไว้ตอนทดสอบ: `manifest/ex
 
 ## 3. ปัญหาที่ต้องแก้ก่อน — ทั้งหมดมาจากการรันจริง
 
-### 3.1 ไม่มี retry/fallback และมันสร้าง failure shape ที่แย่ที่สุด
+### 3.1 ไม่มี retry/fallback และมันสร้าง failure shape ที่แย่ที่สุด  — ✅ แก้แล้ว (ข้อ 11)
 
 รอบที่โพสต์ลงโต๊ะประชุมสำเร็จ **จบด้วย `run failed`**
 
@@ -65,7 +65,7 @@ run failed: 502 Upstream error from Nvidia
 
 **ต้องมี:** backoff บน 429/5xx · `model.preferred` เป็น fallback chain จริง (ตอนนี้ `resolveModel` หยิบตัวแรกที่เจอแล้วจบ ไม่เคยลองตัวที่สอง) · ถ้าจบไม่ได้ ต้องรายงาน side effect ที่ลงไปแล้ว
 
-### 3.2 `audit: required: true` เป็นชื่ออย่างเดียว
+### 3.2 `audit: required: true` เป็นชื่ออย่างเดียว  — ✅ แก้แล้ว (ข้อ 11)
 
 ```ts
 // runtimes/dsh/adapter.ts:112
@@ -533,5 +533,67 @@ $ run manifests/workspace-researcher.yaml --target pi --approve deny --trace
 - **`unsupported()` ยังแค่เตือน ไม่ล้ม build** — ข้อ 6 ยังค้าง ตอนนี้ `pi` รายงาน
   `trace.model_step` แล้ว CLI พิมพ์ ⚠ แล้วรันต่อ ถ้าวันหน้ามี capability ที่เกี่ยวกับความปลอดภัย
   ต้องเปลี่ยนเป็นล้ม build
-- **retry / audit sink / agent identity** (ข้อ 3.1–3.3) ยังไม่แตะ
+- ~~**retry / audit sink**~~ ✅ ทำแล้ว ดูข้อ 11 · **agent identity** (ข้อ 3.3) ยังค้าง
 - **แยก `dsh` เป็น `openai-compatible` / `acp` / `dsh`** (ข้อ 5.6) ยังไม่ทำ — รอบนี้เพิ่ม `pi` อย่างเดียว
+
+
+---
+
+## 11. retry, model fallback และ audit sink
+
+ทำต่อจากข้อ 10 · ปิดข้อ 3.1 และ 3.2
+
+```
+npm test    70 passed (70)      ← เดิม 64
+```
+
+### 11.1 run ที่ล้มเหลว ห้ามโกหกว่าไม่มีอะไรเกิดขึ้น
+
+ปัญหาไม่ใช่ว่า free tier ไม่เสถียร แต่คือ**รูปแบบ**ของความล้มเหลว — รอบที่บันทึกไว้ในข้อ 3.1
+คือ agent โพสต์ลงโต๊ะประชุมสำเร็จแล้ว step ถัดไปตาย 502 ข้อความอยู่บนกระดานจริง
+แต่ CLI พิมพ์ `run failed` แก้เป็นสามชั้น:
+
+```
+429 / 408 / 5xx / เน็ตพัง  → backoff ทวีคูณแล้วลองใหม่          (builder/retry.ts)
+ยังไม่ได้                   → ไล่ไป model ถัดไปใน spec.model.preferred
+ยังไม่ได้อีก                 → RunAborted พา trace + toolCalls มาด้วย
+                              CLI ลิสต์ tool ที่ทำงานไปแล้วออกมา   (builder/errors.ts)
+```
+
+`400`/`401` **ไม่ retry** — แปลว่า "ไม่ใช่แบบนี้" ไม่ใช่ "ไม่ใช่ตอนนี้" ลองซ้ำมีแต่เปลืองโควตา
+มีเทสต์ยืนยันว่ายิงครั้งเดียวจริง
+
+`spec.model.preferred` กลายเป็น fallback chain จริง — เดิม `resolveModel` หยิบตัวแรกที่รู้จักแล้วจบ
+ตอนนี้ `resolveModelChain` คืนทั้งสาย `CompiledAgent.modelFallbacks` พาไปด้วย
+fallback ที่ไม่มี key ถูกตัดออกตั้งแต่ต้นรัน **พร้อมบันทึกเหตุผล** — การเหลือ fallback เป็นศูนย์เงียบ ๆ
+คือวิธีที่ run จะดูเหมือนไม่เคยมีทางเลือก
+
+`pi` ทำ fallback ไม่ได้ (session ผูกกับ provider เดียว) จึงประกาศผ่าน `unsupported()` ว่า
+`model.fallback` แทนที่จะปล่อยให้ manifest ดูเหมือนมี fallback
+
+### 11.2 audit มีที่เก็บแล้ว
+
+`--audit-log <file>` เขียน JSON Lines ระหว่างรัน บรรทัดแรกคือ run header
+(`runId` · `manifestChecksum` · agent@version · target · model · autonomy · input)
+แล้วตามด้วย event ละบรรทัดที่ผูกด้วย `runId` เดียวกัน
+
+```
+RUN   09ff81fc workspace-researcher@0.1.0 dsh model=nemotron-3-ultra-free route=gateway
+EVENT model_call {"step": 0, "model": "nemotron-3-ultra-free"}
+```
+
+และถ้า manifest เขียน `audit.required: true` แต่ไม่ได้ส่ง `--audit-log` **CLI เตือน**:
+
+```
+⚠ manifest requires audit but nothing is storing it — pass --audit-log <file>
+```
+
+สัญญาที่ระบบรักษาไม่ได้ อันตรายกว่าไม่มีสัญญา — อย่างน้อยตอนนี้มันบอก
+
+### 11.3 ที่ยังค้าง
+
+- **agent identity** (ข้อ 3.3) — ข้อความยังขึ้นชื่อตาม bearer token ต้องแก้ที่ฝั่ง MCP server
+- **`unsupported()` ยังแค่เตือน ไม่ล้ม build** (ข้อ 6) — ตอนนี้มี 3 ค่าจริงแล้ว
+  (`mcp.connect`, `trace.model_step`, `model.fallback`) ทั้งหมดเป็น degradation ไม่ใช่เรื่องความปลอดภัย
+  แต่กติกาว่าอันไหนล้ม อันไหนเตือน ยังไม่ได้เขียน
+- **แยก `dsh` เป็น `openai-compatible` / `acp` / `dsh`** (ข้อ 5.6)
