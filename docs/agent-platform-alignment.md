@@ -134,3 +134,6 @@ ADR-0006 บังคับ consumer สามข้อ:
 ก่อนแตะ manifest — เพราะ `agent/v1` ของเขายังไม่มี consumer เลยสักราย
 (`agent` `provider` `model` `tool` `mcp` = *ยังไม่มีใคร pin*) เราจะเป็นรายแรก
 และรายแรกเป็นคนที่ตั้งบรรทัดฐานให้คนหลัง
+
+**สถานะ (2026-09-02):** ร่าง issue ทั้งสองใบเขียนแล้วที่ [`proposals/`](../proposals/)
+— **ยังไม่เปิด** รอตรวจ wording ตาม [รีวิวรอบ 4](../ref/2026-09-02-review-04-open-issues-before-pinning.md)
