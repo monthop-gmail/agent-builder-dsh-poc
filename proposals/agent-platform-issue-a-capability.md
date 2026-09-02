@@ -92,7 +92,11 @@ Model Registry (เปลี่ยน) ──▶  ModelBinding คนละต�
 แต่นั่นแปลว่า **คำตอบนี้จะเป็น precedent** ให้ consumer รายถัดไปของทั้งสามตัว
 เราจึงไม่อยากตัดสินเองในบ้านตัวเองแล้วค่อยมาขอให้รับรองทีหลัง
 
-## คำถามพ่วง — ไม่ต้องตอบในใบนี้ก็ได้
+## Follow-up — ไม่ blocking
+
+สามข้อนี้ **ไม่ต้องตอบก่อนตัดสินคำถามหลัก** และไม่ควรถ่วงใบนี้ — เขียนไว้เพราะเจอระหว่างอ่าน
+ถ้าข้อไหนใหญ่พอจะเป็นใบของตัวเอง บอกได้ เราแยกออกไปเปิดต่างหาก
+
 
 ### 1. `capability_requirement.preferred` กับ fallback ตอน runtime เป็นคนละเรื่อง
 
@@ -129,4 +133,4 @@ taxonomy 13 ตัวไม่มี `tool_calling` แต่ `model/v1` `Reques
 
 [`docs/agent-platform-alignment.md`](https://github.com/monthop-gmail/agent-builder-dsh-poc/blob/main/docs/agent-platform-alignment.md) ·
 [`docs/compiled-agent-contract.md`](https://github.com/monthop-gmail/agent-builder-dsh-poc/blob/main/docs/compiled-agent-contract.md) ·
-[`docs/contract-stability.md`](https://github.comio/monthop-gmail/agent-builder-dsh-poc/blob/main/docs/contract-stability.md)
+[`docs/contract-stability.md`](https://github.com/monthop-gmail/agent-builder-dsh-poc/blob/main/docs/contract-stability.md)
