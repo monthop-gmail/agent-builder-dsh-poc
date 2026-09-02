@@ -9,6 +9,12 @@
  * This is why `agent/v1alpha2` does NOT have to be bumped to satisfy
  * `tool/v1`: nothing a user writes changes.
  *
+ * ADR-0027 then made the transformation itself part of the contract, because
+ * a mapping each consumer invents is a mapping two consumers disagree about —
+ * and then a profile's named deny covers one of them and not the other. The
+ * six rules in `tool/v1` `platform_rules` are implemented here, and
+ * `tests/tool-identity.test.ts` checks each one by number.
+ *
  *     ToolId: ^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$
  *
  * Note what that pattern demands beyond "has a dot": every segment must be
@@ -47,16 +53,34 @@ const EXPLICIT: Record<string, string> = {
 };
 
 /**
- * Make one path segment legal: lowercase, and anything outside `[a-z0-9_]`
- * becomes `_`. Leading digits get a prefix because a segment must start with a
- * letter.
+ * ADR-0027 rule 2: lowercase, then every character outside `[a-z0-9_]` becomes
+ * `_` **one at a time**.
+ *
+ * No collapsing of runs: `a--b` is `a__b`, not `a_b`. Collapsing would invent
+ * collisions that the input did not have, and `a__b` already satisfies the
+ * pattern, so the shorter form buys nothing and costs correctness.
  */
 function sanitiseSegment(raw: string): string {
-  const lowered = raw.toLowerCase().replace(/[^a-z0-9_]/g, "_");
-  return /^[a-z]/.test(lowered) ? lowered : `t_${lowered}`;
+  return raw.toLowerCase().replace(/[^a-z0-9_]/g, "_");
 }
 
-/** Raised when two different tools would land on the same wire id. */
+/** Raised when a name cannot be transformed without guessing (ADR-0027 rule 3). */
+export class ToolIdUnmappableError extends Error {
+  constructor(
+    readonly name: string,
+    readonly attempted: string,
+  ) {
+    super(
+      `tool id: '${name}' has no deterministic ToolId (best effort '${attempted}'). ` +
+        `A segment must start with a letter, and inventing a prefix would make the ` +
+        `result differ between implementations — which is the exact failure the rule ` +
+        `exists to prevent. Add an explicit mapping instead.`,
+    );
+    this.name = "ToolIdUnmappableError";
+  }
+}
+
+/** ADR-0027 rule 4 — raised when two different tools would land on one id. */
 export class ToolIdCollisionError extends Error {
   constructor(
     readonly id: string,
@@ -85,12 +109,16 @@ export function toolIdFor(name: string): string {
   if (TOOL_ID.test(name)) return name;
 
   const parts = name.split(".").filter(Boolean).map(sanitiseSegment);
+  // ADR-0027 rule 2 step 3: prepend a namespace segment. For MCP that segment
+  // is the server id, which the discovery path has already put in front.
   const segments = parts.length > 1 ? parts : [BUILTIN_NAMESPACE, ...parts];
   const id = segments.join(".");
 
-  if (!TOOL_ID.test(id)) {
-    throw new Error(`tool id: '${name}' could not be mapped to a valid ToolId (got '${id}')`);
-  }
+  // ADR-0027 rule 3: still not a ToolId — `2fa_setup` stays illegal however it
+  // is namespaced, because the LAST segment starts with a digit. Reject and
+  // make someone write the mapping down. Guessing a prefix here would produce
+  // a different id in every implementation that guessed differently.
+  if (!TOOL_ID.test(id)) throw new ToolIdUnmappableError(name, id);
   return id;
 }
 
@@ -101,6 +129,10 @@ export function toolIdFor(name: string): string {
  * a collision is a property of the SET — checking one name at a time can never
  * see it. Same reason `tool-names.ts` checks the model-facing wire names as a
  * set rather than one at a time.
+ *
+ * Refusing collisions is also what makes ADR-0027 rule 5 hold: a map with no
+ * two names on one id is invertible, so the original name is always
+ * recoverable from the id it was given.
  */
 export function toolIdMap(names: readonly string[]): Map<string, string> {
   const byId = new Map<string, string[]>();

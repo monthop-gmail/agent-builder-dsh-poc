@@ -12,6 +12,7 @@ platform_contract_version: "0.1"
 contracts:
   - agent/v1         # record ที่ Builder ปล่อยได้จาก manifest — validate ทุกใบใน compatibility set
   - tool/v1          # `ToolId` บน wire · map จากชื่อภายในที่ builder/tool-ids.ts จุดเดียว
+                     # ทำตาม platform_rules ครบ 6 ข้อ (ADR-0027) · เทสอ้างเลขข้อไว้
   - capability/v1    # taxonomy 14 ค่า + canonical_scope ที่ tool และ manifest ใช้เรียกความสามารถ
   - profile/v1       # เพดานที่ `--profile` รับเข้ามา แล้วรวมกับ policy ของ agent
   - execution/v1     # `provider_switches` + `provider_id` จากการรันจริง
@@ -32,7 +33,7 @@ conformance:
   #                       · bypass_actors: 0 · ห้าม force push · ต้องผ่าน PR
   #                       (รูปแบบเดียวกับ botforge ไม่ใช่ legacy branch protection)
 
-pinned_contracts_commit: 6cb0b795988d6b0b353929b0f028309b4c0d7838   # conformance/pinned.yaml
+pinned_contracts_commit: 639da9e8865fef8c5d74e5f61789957c2f32cf16   # conformance/pinned.yaml
 
 # ─────────────────────────────────────────────────────────────────────────────
 # สิ่งที่ **ไม่** pin และเหตุผล
@@ -74,6 +75,17 @@ known_gaps:
 # ─────────────────────────────────────────────────────────────────────────────
 
 closed_gaps:
+  - id: undefined-toolid-transformation
+    was: >-
+      กฎการแปลงชื่อเป็น `ToolId` ไม่มีที่ไหนกำหนด — สอง consumer ที่ต่อ server เดียวกัน
+      อาจได้ id คนละชุด แล้วเพดานเชิงชื่อของ profile จะคุ้มรายหนึ่งแต่ไม่คุ้มอีกราย
+    closed_by: >-
+      [ADR-0027](https://github.com/monthop-gmail/agent-platform/blob/main/decisions/0027-toolid-transformation-must-be-deterministic.md)
+      · `tool/v1` v1.1.0 `platform_rules` 6 ข้อ · เกิดจากหลักฐาน MCP ที่รีโปนี้ probe แล้วส่งเข้า #59
+    note: >-
+      ข้อ 3 ทำให้เราต้อง**แก้ของที่เพิ่งเขียน** — เดิมเดา prefix `t_` ให้ชื่อที่ขึ้นต้นด้วย
+      ตัวเลข ซึ่งเป็นสิ่งที่ ADR ห้ามตรง ๆ เพราะการเดาทำให้ผลไม่ deterministic
+      ตอนนี้ reject แล้วบังคับ mapping มือแทน
   - id: bare-tool-names
     was: >-
       `calculator` `current_time` `web_search` ไม่ใช่ `ToolId` ที่ถูกต้อง จึง pin
@@ -93,12 +105,6 @@ closed_gaps:
 # ─────────────────────────────────────────────────────────────────────────────
 
 open_questions:
-  - question: >-
-      ถ้า consumer ต้อง sanitize ชื่อ MCP เอง กฎการแปลงควรอยู่ใน `tool/v1` ไหม —
-      สอง consumer ที่ต่อ server เดียวกันอาจได้ `ToolId` คนละชุด ซึ่งทำลายสมมติฐาน
-      ที่ ADR-0026 พึ่งอยู่
-    asked_at: https://github.com/monthop-gmail/agent-platform/issues/59
-    status: รอ decision
   - question: consumer pin ไฟล์ใน `profiles/` ได้ไหม หรือเป็นแค่ตัวอย่าง
     asked_at: https://github.com/monthop-gmail/agent-platform/issues/47
     status: ยังไม่มีคำตอบ
